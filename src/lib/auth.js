@@ -3,13 +3,16 @@ import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, s
 import { initializeApp } from 'firebase/app'
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyB2vKKFLzFYRmIwFDCCsW1lEt-_r4-LQ4',
+  apiKey: 'AIzaSyB2vKKFLzFYRmIwFDCCsW1lEt-j_r4-LQ4',
   authDomain: 'egg-supperrunners.firebaseapp.com',
   projectId: 'egg-supperrunners',
   storageBucket: 'egg-supperrunners.firebasestorage.app',
   messagingSenderId: '1041092063845',
   appId: '1:1041092063845:web:2a7ad1b91cfa60e9388c8c',
 }
+
+// This is a private single-user application. Create this account in Firebase Console.
+export const ADMIN_EMAIL = 'eggttball@gmail.com'
 
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
@@ -31,11 +34,11 @@ const messages = {
   'auth/network-request-failed': '網路連線失敗，請稍後再試。',
 }
 
-export async function signIn(email, password) {
+export async function signIn(password) {
   authState.error = ''
   try {
     await setPersistence(auth, browserLocalPersistence)
-    await signInWithEmailAndPassword(auth, email.trim(), password)
+    await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password)
   } catch (error) {
     const message = messages[error.code] || '登入失敗，請確認帳號與密碼。'
     authState.error = message
