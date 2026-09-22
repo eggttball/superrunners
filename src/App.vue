@@ -1,17 +1,21 @@
 <script setup vapor>
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { game, initialize, go, toggleMusic, downloadSave, startAudio } from './lib/game.js'
+import { authState, signOut } from './lib/auth.js'
 import HomeView from './components/HomeView.vue'
 import SchoolsView from './components/SchoolsView.vue'
 import TeamsView from './components/TeamsView.vue'
 import RaceView from './components/RaceView.vue'
 import StudentDialog from './components/StudentDialog.vue'
 import Icon from './components/Icon.vue'
+import AuthPanel from './components/AuthPanel.vue'
 
 const labels = { home: '田徑基地', schools: '學校資料', teams: '我的隊伍', race: '校內比賽' }
 const progressLabel = computed(() => ({ population: '正在建立全國班級與學生', ranking: '正在計算全國能力排名', complete: '全國資料生成完成' }[game.phase] || game.phase))
+const showAuth = ref(false)
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
+async function logout() { await signOut(); showAuth.value = false }
 onMounted(() => {
   initialize()
   document.addEventListener('pointerdown', startAudio)
@@ -38,11 +42,14 @@ onUnmounted(() => {
       <div class="topbar-tools">
         <span class="save-status"><i :class="{ pulsing: game.saving || !game.ready }"></i>{{ game.saving ? '保存中' : game.ready ? '本機已存檔' : '建立世界中' }}</span>
         <button class="icon-button" @click="toggleMusic" :disabled="!game.ready" :aria-label="game.muted ? '開啟背景音樂' : '靜音背景音樂'" :title="game.muted ? '開啟背景音樂' : '靜音背景音樂'"><Icon :name="game.muted ? 'muted' : 'sound'" /></button>
+        <button v-if="authState.user" class="auth-user" @click="logout" :title="`登出 ${authState.user.email}`"><span class="auth-avatar">{{ (authState.user.email || '?')[0].toUpperCase() }}</span><span class="auth-email">{{ authState.user.email }}</span><small>登出</small></button>
+        <button v-else class="btn small auth-trigger" @click="showAuth = !showAuth"><Icon name="user" :size="16" />登入</button>
         <button class="btn small export-button" @click="downloadSave" :disabled="!game.ready || game.exportBusy || game.saving"><Icon name="download" :size="16" /><span>{{ game.exportBusy ? '正在匯出…' : '匯出存檔' }}</span></button>
       </div>
     </header>
 
     <main>
+      <AuthPanel v-if="showAuth && !authState.user && game.tab === 'home'" />
       <HomeView v-if="game.tab === 'home'" />
       <template v-else-if="game.ready">
         <SchoolsView v-if="game.tab === 'schools'" />

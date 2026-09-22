@@ -9,6 +9,12 @@
     "preview": "vite preview --host 127.0.0.1",
     "update:schools": "node scripts/fetch-schools.mjs"
   },
-  "dependencies": { "vue": "3.6.0-rc.8" },
-  "devDependencies": { "@vitejs/plugin-vue": "6.0.9", "vite": "8.3.0" }
+  "dependencies": {
+    "firebase": "^12.19.0",
+    "vue": "3.6.0-rc.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.9",
+    "vite": "8.3.0"
+  }
 }
