@@ -1,6 +1,6 @@
 <script setup vapor>
 import { ref } from 'vue'
-import { ADMIN_EMAIL, authState, signIn } from '../lib/auth.js'
+import { authState, signIn } from '../lib/auth.js'
 import Icon from './Icon.vue'
 
 const password = ref('')
@@ -20,7 +20,7 @@ async function submit() {
       <div><span class="eyebrow"><span class="live-dot"></span> PRIVATE ACCESS</span><h2 id="auth-title">登入田徑基地</h2></div>
       <Icon name="settings" :size="20" />
     </div>
-    <p class="muted">管理者帳號：{{ ADMIN_EMAIL }}<br />登入後才能使用田徑基地的所有功能。</p>
+    <p class="muted">請輸入管理者密碼，登入後才能使用田徑基地的所有功能。</p>
     <form class="auth-form" @submit.prevent="submit">
       <label class="field">密碼<input v-model="password" type="password" autocomplete="current-password" placeholder="輸入密碼" required /></label>
       <p v-if="authState.error" class="auth-error" role="alert">{{ authState.error }}</p>
