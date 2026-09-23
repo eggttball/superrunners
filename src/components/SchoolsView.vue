@@ -4,6 +4,7 @@ import { game, getSchool, getClass, getStudent, getTeam, toggleFavorite, toggleF
 import SchoolPicker from './SchoolPicker.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
+import GamePageHeader from './GamePageHeader.vue'
 
 const grade = ref(1)
 const classId = ref('')
@@ -40,7 +41,7 @@ watch(pageCount, count => { if (page.value > count) page.value = count })
 
 <template>
   <section class="content-view schools-view">
-    <div class="view-header"><div><div class="eyebrow">THE NEXT GENERATION</div><h1>學校資料<span class="heading-dot">.</span></h1><p class="muted">每一所學校，都藏著下一位跑道新星。</p></div><span class="badge green"><Icon name="globe" :size="14" />臺灣 · {{ game.world.schools.length }} 所學校</span></div>
+    <GamePageHeader title="學校資料" caption="CAMPUS MAP" description="逛逛校園，發掘下一位跑道新星。" theme="schools"><span class="badge"><Icon name="globe" :size="15" />臺灣 · {{ game.world.schools.length }} 所學校</span></GamePageHeader>
     <div class="school-layout">
       <SchoolPicker v-model="game.schoolId" />
       <div v-if="school" class="panel detail-panel school-detail">

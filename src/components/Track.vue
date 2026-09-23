@@ -10,6 +10,7 @@ const props = defineProps({
   arcade: { type: Boolean, default: false },
   cameraViewBox: { type: String, default: '' },
 })
+const brightPalette = computed(() => props.arcade || props.raceMode)
 
 const prefix = `track-${useId().replaceAll(':', '')}`
 const infieldId = `${prefix}-infield`
@@ -122,29 +123,29 @@ onBeforeUnmount(() => {
     >
       <defs>
         <linearGradient :id="surfaceId" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" :stop-color="arcade ? '#f69077' : '#d49470'" />
-          <stop offset="100%" :stop-color="arcade ? '#e76d60' : '#be7053'" />
+          <stop offset="0%" :stop-color="brightPalette ? '#f69077' : '#d49470'" />
+          <stop offset="100%" :stop-color="brightPalette ? '#e76d60' : '#be7053'" />
         </linearGradient>
         <linearGradient :id="grassId" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" :stop-color="arcade ? '#6bb778' : '#32634b'" />
-          <stop offset="100%" :stop-color="arcade ? '#4e9b72' : '#264e3d'" />
+          <stop offset="0%" :stop-color="brightPalette ? '#6bb778' : '#32634b'" />
+          <stop offset="100%" :stop-color="brightPalette ? '#4e9b72' : '#264e3d'" />
         </linearGradient>
-        <pattern v-if="arcade" :id="lawnId" width="8" height="8" patternUnits="userSpaceOnUse">
+        <pattern v-if="brightPalette" :id="lawnId" width="8" height="8" patternUnits="userSpaceOnUse">
           <path d="M1 2h.5v.5H1zM5 6h.5v.5H5z" fill="#619955" opacity=".32" />
         </pattern>
         <clipPath :id="infieldId"><path :d="ovalPath(TRACK.innerRadius)" /></clipPath>
       </defs>
 
-      <rect x="-65" y="-65" width="215" height="132" :fill="arcade ? '#b5e18b' : '#dce5d1'" />
-      <rect v-if="arcade" x="-65" y="-65" width="215" height="132" :fill="`url(#${lawnId})`" />
-      <path :d="ovalPath(TRACK.outerRadius + 5)" fill="none" :stroke="arcade ? '#d9efb6' : '#d0d7c4'" stroke-width="2.3" />
-      <path :d="ovalPath(TRACK.outerRadius + 2.2)" :fill="arcade ? '#689e71' : '#c5cfbc'" />
+      <rect x="-65" y="-65" width="215" height="132" :fill="brightPalette ? '#b5e18b' : '#dce5d1'" />
+      <rect v-if="brightPalette" x="-65" y="-65" width="215" height="132" :fill="`url(#${lawnId})`" />
+      <path :d="ovalPath(TRACK.outerRadius + 5)" fill="none" :stroke="brightPalette ? '#d9efb6' : '#d0d7c4'" stroke-width="2.3" />
+      <path :d="ovalPath(TRACK.outerRadius + 2.2)" :fill="brightPalette ? '#689e71' : '#c5cfbc'" />
 
       <g v-for="(tree, index) in trees" :key="index" :transform="`translate(${tree[0]} ${tree[1]}) scale(${tree[2]})`" shape-rendering="crispEdges">
         <path d="M-2-1h6v5h-6zM-3 0h8v3h-8z" fill="#809779" opacity=".27" />
-        <path d="M-2-3h4v7h-4zM-4-1h8v3h-8zM-3-2h6v5h-6z" :fill="arcade ? '#397e60' : '#42634a'" />
-        <path d="M-2-3h3v5h-3zM-3-1h5v2h-5z" :fill="arcade ? '#62b468' : '#547754'" />
-        <path d="M-2-2h2v2h-2z" :fill="arcade ? '#a6dc7c' : '#6f8a5e'" />
+        <path d="M-2-3h4v7h-4zM-4-1h8v3h-8zM-3-2h6v5h-6z" :fill="brightPalette ? '#397e60' : '#42634a'" />
+        <path d="M-2-3h3v5h-3zM-3-1h5v2h-5z" :fill="brightPalette ? '#62b468' : '#547754'" />
+        <path d="M-2-2h2v2h-2z" :fill="brightPalette ? '#a6dc7c' : '#6f8a5e'" />
       </g>
 
       <path :d="ovalPath(TRACK.outerRadius)" :fill="`url(#${surfaceId})`" />
@@ -159,7 +160,7 @@ onBeforeUnmount(() => {
       />
       <path :d="ovalPath(TRACK.innerRadius)" :fill="`url(#${grassId})`" />
       <g :clip-path="`url(#${infieldId})`">
-        <rect v-for="stripe in stripes" :key="stripe" :x="-40 + stripe * 10" y="-37" width="5" height="74" fill="#a1bf87" :opacity="arcade ? .15 : .04" />
+        <rect v-for="stripe in stripes" :key="stripe" :x="-40 + stripe * 10" y="-37" width="5" height="74" fill="#a1bf87" :opacity="brightPalette ? .15 : .04" />
       </g>
 
       <g fill="none" stroke="#bdceb1" stroke-width=".22" opacity=".44">

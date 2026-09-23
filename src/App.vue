@@ -29,7 +29,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'arcade-shell': game.tab === 'home' && authState.user }">
+  <div class="app-shell arcade-shell" :class="{ 'interior-shell': game.tab !== 'home' || !authState.user }">
     <header class="topbar">
       <button class="wordmark" @click="go('home')" aria-label="Super Runners 首頁">
         <svg viewBox="0 0 32 32" class="brand-mark" aria-hidden="true"><path d="M18 2h6v6h-6zm-6 8h10v4h-5v5h-5zm-5 1h5v4H7zm14 3h5v4h-5zm-9 5h5v5h-5zm-6 5h6v4H6zm12-5h5v8h-5z" /></svg>
@@ -44,6 +44,14 @@ onUnmounted(() => {
     </header>
 
     <main>
+      <nav v-if="authState.user && game.ready && game.tab !== 'home'" class="page-navigation" aria-label="遊戲選單">
+        <button class="return-home" @click="go('home')"><Icon name="back" :size="17" />回主場</button>
+        <div class="page-navigation-tabs">
+          <button class="nav-schools" :aria-current="game.tab === 'schools' ? 'page' : undefined" @click="go('schools')"><Icon name="school" :size="17" />學校資料</button>
+          <button class="nav-teams" :aria-current="game.tab === 'teams' ? 'page' : undefined" @click="go('teams')"><Icon name="team" :size="17" />我的隊伍</button>
+          <button class="nav-race" :aria-current="game.tab === 'race' ? 'page' : undefined" @click="go('race')"><Icon name="flag" :size="17" />校內比賽</button>
+        </div>
+      </nav>
       <div v-if="authState.loading" class="auth-loading panel" role="status">正在確認登入狀態…</div>
       <AuthPanel v-else-if="!authState.user" />
       <template v-else>

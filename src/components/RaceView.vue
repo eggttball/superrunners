@@ -7,6 +7,7 @@ import SchoolPicker from './SchoolPicker.vue'
 import Track from './Track.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
+import GamePageHeader from './GamePageHeader.vue'
 
 const gradeLabels = ['一年級', '二年級', '三年級']
 const selectedSchoolId = ref(game.schoolId)
@@ -181,7 +182,7 @@ onUnmounted(() => { cancelAnimationFrame(frame); setMusicMode('ambient') })
 <template>
   <section class="content-view race-view">
     <template v-if="phase === 'setup'">
-      <div class="view-header"><div><div class="eyebrow">SCHOOL MEET</div><h1>校內比賽<span class="heading-dot">.</span></h1><p class="muted">在熟悉的操場，跑出不一樣的自己。</p></div><span class="badge green"><Icon name="flag" :size="14" />100m SPRINT</span></div>
+      <GamePageHeader title="校內比賽" caption="RACE DAY" description="選好班級，今天就來刷新紀錄！" theme="race"><span class="badge"><Icon name="flag" :size="15" />100m SPRINT</span></GamePageHeader>
       <div class="race-setup-layout">
         <SchoolPicker v-model="selectedSchoolId" />
         <div class="race-setup-detail panel">

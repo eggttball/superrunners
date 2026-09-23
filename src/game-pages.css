@@ -1,0 +1,361 @@
+/* The interior screens share the home palette; the full stadium view keeps
+   its own layout. All game data, timing and runner artwork remain independent. */
+.interior-shell {
+  --ink: #263c59;
+  --muted: #586e7c;
+  --accent: #32755f;
+  --panel: #fff9e8;
+  --panel-raised: #eaf1e6;
+  --line: #263c5926;
+  --page-color: #a6e2df;
+  --game-shadow: 4px 4px 0 #263c5938;
+  color-scheme: light;
+}
+.interior-shell main { padding-bottom: 24px; }
+.interior-shell .content-view { max-width: 1520px; padding: 0 28px 32px; }
+.teams-view { --page-color: #ddd3fa; }
+.race-view { --page-color: #ffe597; }
+.interior-shell .muted, .interior-shell .dim { color: var(--muted); }
+.interior-shell .eyebrow { color: #526983; font: 700 10px ui-monospace, monospace; letter-spacing: .12em; }
+.interior-shell .heading-dot { color: #dc715a; }
+.interior-shell .panel { border: 2px solid var(--ink); border-radius: 9px; background: var(--panel); box-shadow: var(--game-shadow); }
+.interior-shell .btn { color: var(--ink); border: 2px solid var(--ink); background: #fffdf4; border-radius: 5px; box-shadow: 0 3px 0 var(--ink); font-weight: 700; min-height: 42px; }
+.interior-shell .btn.primary { background: var(--game-yellow); color: var(--ink); border-color: var(--ink); }
+.interior-shell .btn.ghost { border-color: #263c5945; box-shadow: 0 2px 0 #263c5926; background: transparent; }
+.interior-shell .btn:hover:not(:disabled) { background: #ffedab; transform: translateY(-2px); }
+.interior-shell .btn:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+.interior-shell .btn:disabled { opacity: .5; }
+.interior-shell .btn.small { min-height: 36px; }
+.interior-shell .topbar .export-button { background: var(--game-yellow); border-color: #172d44; }
+.interior-shell .wordmark .brand-light { color: var(--game-yellow); }
+.interior-shell .save-status i { background: #b5dd84; }
+.interior-shell .badge { background: #eef1ed; color: #435a70; border: 1px solid #263c5933; font-size: 11px; font-weight: 600; padding: 6px 10px; }
+.interior-shell .badge.green { background: #d8edca; color: #326044; border-color: #86af80; }
+.interior-shell .field { color: var(--ink); }
+.interior-shell input:not([type='checkbox']), .interior-shell select, .interior-shell textarea,
+.interior-shell .school-picker .county-field select, .interior-shell .roster-toolbar select, .interior-shell .nickname-field input {
+  background: #fffdf5; color: var(--ink); border: 2px solid #9aadb0; border-radius: 5px; color-scheme: light;
+}
+.interior-shell input::placeholder { color: #6c7e89; }
+.interior-shell input:focus, .interior-shell select:focus { border-color: #7962a5; }
+.interior-shell input[type='checkbox'] { accent-color: #377d6e; }
+.interior-shell .data-note { color: #4b697b; font-size: 11px; }
+
+/* A small route bar belongs to the inner pages, leaving the home menu alone. */
+.page-navigation { max-width: 1520px; margin: auto; padding: 20px 28px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.page-navigation button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 16px; border: 2px solid transparent; border-radius: 5px; background: transparent; color: #34566c; font-size: 12px; font-weight: 700; }
+.page-navigation .return-home { padding-left: 0; }
+.page-navigation-tabs { display: flex; gap: 8px; }
+.page-navigation button:hover { background: #fff9e899; }
+.page-navigation button[aria-current='page'] { border-color: var(--ink); background: var(--game-cream); box-shadow: 2px 2px 0 #263c5930; color: var(--ink); }
+.page-navigation .nav-schools[aria-current] { background: #a6e2df; }
+.page-navigation .nav-teams[aria-current] { background: #ddd3fa; }
+.page-navigation .nav-race[aria-current] { background: #ffdc61; }
+.page-hero { position: relative; display: flex; align-items: center; gap: 22px; padding: 22px 26px; margin-bottom: 26px; border: 2px solid var(--ink); border-radius: 9px; background: var(--page-color); box-shadow: var(--game-shadow); }
+.page-hero-portrait { position: relative; isolation: isolate; display: grid; place-items: center; width: 94px; height: 94px; flex: 0 0 auto; background: #fff9e8bb; border: 2px solid var(--ink); border-radius: 6px; box-shadow: 3px 3px 0 #263c5924; }
+.page-hero-portrait .pixel-runner { z-index: 1; }
+.portrait-ground { position: absolute; left: 10px; right: 10px; bottom: 12px; height: 6px; background: #263c5925; }
+.page-hero-copy { min-width: 0; }
+.page-hero-copy .pixel-checker { width: 14px; height: 12px; background-size: 8px 8px; }
+.page-hero-copy h1 { font-size: clamp(26px, 2.7vw, 36px); margin: 7px 0 5px; letter-spacing: .025em; font-weight: 900; }
+.page-hero-copy p { color: #415b6b; font-size: 12px; }
+.page-hero-extra { margin-left: auto; flex-shrink: 0; }
+.page-hero-extra .badge { background: #fff9e8c9; border-color: #263c5940; }
+.interior-shell .section-title h3, .interior-shell .split-heading h2 { color: var(--ink); font-weight: 800; }
+.interior-shell .section-title h3::before { content: ''; display: inline-block; width: 7px; height: 17px; border-radius: 1px; background: #df846b; flex-shrink: 0; }
+.interior-shell .section-title .muted { font-size: 11px; }
+.interior-shell .stat-card { background: #e4f0eb; border: 1px solid #263c5933; border-bottom: 3px solid #263c594a; border-radius: 5px; }
+.interior-shell .stat-card:nth-child(2) { background: #eee6f8; }
+.interior-shell .stat-card:nth-child(3) { background: #fff0bd; }
+.interior-shell .stat-card:nth-child(4) { background: #f8ddce; }
+.interior-shell .stat-card strong { color: var(--ink); font-size: 32px; font-weight: 700; }
+.interior-shell .stat-card span { color: #526978; font-size: 11px; }
+
+/* School discovery and the shared school selector. */
+.interior-shell .school-layout, .interior-shell .race-setup-layout { grid-template-columns: 288px minmax(0, 1fr); gap: 24px; }
+.interior-shell .picker-panel { padding: 20px; }
+.interior-shell .picker-title { margin: -20px -20px 22px; padding: 17px 20px; background: var(--page-color); border-bottom: 2px solid var(--ink); }
+.interior-shell .picker-title h2 { font-size: 20px; }
+.interior-shell .picker-title > svg { color: #376b72; }
+.interior-shell .school-picker .field > span:first-child { color: #435a6c; font-size: 12px; font-weight: 600; }
+.interior-shell .school-picker .search-control { border: 2px solid #9aadb0; border-radius: 5px; background: #fffdf5; }
+.interior-shell .school-picker .search-control input { background: transparent; border: 0; color: var(--ink); }
+.interior-shell .school-picker .search-control:focus-within { border-color: #7962a5; }
+.interior-shell .search-control svg { color: #596f7d; }
+.interior-shell .favorite-filter { color: #405c6f; padding: 12px 0 0; }
+.interior-shell .favorite-filter svg, .interior-shell .favorite-count { color: #8b641c; }
+.interior-shell .favorite-count { background: #fff0b6; border: 1px solid #c4a96e; border-radius: 3px; padding: 2px 7px; }
+.interior-shell .favorite-filter input { accent-color: #32755f; }
+.interior-shell .list-heading { color: #526978; border-color: var(--line); }
+.interior-shell .school-options { scrollbar-color: #9cafad transparent; }
+.interior-shell .school-option { color: var(--ink); border-radius: 5px; padding: 11px 8px; }
+.interior-shell .school-option:hover { background: #eef0df; }
+.interior-shell .school-option.selected { background: #d4eeea; border-color: #4f827a; color: var(--ink); box-shadow: inset 3px 0 #4f827a; }
+.interior-shell .school-option-icon { background: #e5ece4; color: #56766e; border: 1px solid #263c5920; }
+.interior-shell .school-option.selected .school-option-icon { color: #285b55; background: #afd8cc; }
+.interior-shell .school-option-copy small { color: #5a7180; }
+.interior-shell .school-option > svg { color: #476d56; }
+.interior-shell .picker-source { border-color: var(--line); color: #607783; }
+.interior-shell .school-emblem { color: #315f68; background: #bce6dc; border: 2px solid var(--ink); border-radius: 6px 6px 18px 18px; box-shadow: 3px 3px 0 #263c5926; }
+.interior-shell .school-code, .interior-shell .school-address { color: #5b7080; }
+.interior-shell .school-actions { padding-bottom: 22px; border-bottom: 1px dashed #9faea6; }
+.interior-shell .grade-picker { background: #e3eae3; border: 1px solid #a1b4ad; border-radius: 6px; gap: 6px; }
+.interior-shell .grade-picker button { color: #4a6577; min-height: 44px; font-weight: 600; }
+.interior-shell .grade-picker button.active { background: #fff9e8; color: var(--ink); box-shadow: 0 2px 0 #506d70; }
+.interior-shell .chip, .interior-shell .class-picker .chip { background: #fffdf6; color: #435c70; border: 1px solid #8ca5ab; min-height: 36px; border-radius: 4px; }
+.interior-shell .chip:hover { background: #e8efde; }
+.interior-shell .class-picker .chip.active { background: #bce6dc; color: #244d53; border-color: #396b68; box-shadow: 0 2px 0 #396b68; }
+.interior-shell .class-picker small { color: #536e78; }
+.interior-shell .class-color { border: 1px solid #263c5955; }
+.interior-shell .roster-toolbar label { color: var(--muted); }
+.interior-shell .ranking-note { color: #60727c; }
+.interior-shell .school-student-link em { color: #82603b; }
+.interior-shell .rank-number { display: inline-grid; place-items: center; min-width: 30px; min-height: 30px; color: #5b7485; font-size: 13px; }
+.interior-shell .rank-leading { background: #ffe99c; border: 1px solid #cba449; border-radius: 4px; color: #73501e; font-weight: 800; }
+.interior-shell .time-kind, .interior-shell .time-kind.estimated { color: #526c78; }
+.interior-shell .school-honors-title { border-color: var(--line); }
+.interior-shell .school-honors-title svg { color: #b27b26; }
+.interior-shell .school-medals-empty { background: #fff3cf; border: 1px dashed #b3a16a; color: #756943; }
+.interior-shell .school-medals-empty svg { color: #ab7c2b; }
+.interior-shell .school-medals-empty strong { color: #715c2d; }
+.interior-shell .medal-student { color: #3e7567; }
+
+/* Readable record sheets, with portraits on pale tiles. */
+.interior-shell .table-wrap { border: 1px solid #a2b1b1; border-radius: 6px; background: #fffdf6; }
+.interior-shell .data-table { font-size: 12px; }
+.interior-shell .data-table th { background: #e3ece8; color: #465f72; border-color: #a8bab6; font-size: 11px; font-weight: 700; padding: 13px 15px; }
+.interior-shell .data-table td { color: var(--ink); border-color: #263c5914; padding: 12px 15px; }
+.interior-shell .data-table tbody tr:nth-child(even) { background: #f4f3e8; }
+.interior-shell .data-table tbody tr:hover { background: #e7f0de; }
+.interior-shell .data-table td small { color: #607580; }
+.interior-shell .data-table .result-time { color: #2e735f; font-size: 22px; font-weight: 700; }
+.interior-shell .student-link .pixel-runner { box-sizing: content-box; padding: 4px; background: #e4ebe4; border: 1px solid #aabbb280; border-radius: 4px; flex-shrink: 0; }
+.interior-shell .student-link:hover { color: #337367; }
+.interior-shell .student-link:focus-visible { outline-offset: 2px; }
+.interior-shell .award-row { border-color: var(--line); }
+.interior-shell .award-row > b { color: #32715d; font-size: 20px; }
+.interior-shell .medal-icon { border: 1px solid #b9b1a0; }
+.interior-shell .medal-1 { color: #926415; background: #ffe7a0; }
+.interior-shell .medal-2 { color: #50687d; background: #e0e8ed; }
+.interior-shell .medal-3 { color: #9c5833; background: #f3d5c2; }
+
+/* Clubhouse and welcome illustrations. */
+.interior-shell .team-list-card { border-top: 6px solid #baabdc; box-shadow: 3px 3px 0 #263c5930; }
+.interior-shell .team-list-card:hover { transform: translateY(-2px); background: #f0e9fd; }
+.interior-shell .team-list-card.selected { background: #e8def8; border-color: #6b568f; }
+.interior-shell .team-emblem { background: #cdbdea; color: #54416f; border: 2px solid #766196; border-radius: 5px; }
+.interior-shell .team-list-footer { color: #624f80; font-weight: 700; }
+.interior-shell .team-detail > .split-heading { padding-bottom: 14px; border-bottom: 1px dashed #b0a4bd; }
+.interior-shell .team-detail > .split-heading h2 { font-size: 24px; }
+.interior-shell .team-empty, .interior-shell .team-prompt, .interior-shell .school-welcome { background-image: radial-gradient(#8294aa20 1px, transparent 1px); background-size: 16px 16px; }
+.interior-shell .empty-state { color: #5d7580; }
+.interior-shell .empty-state h2 { color: var(--ink); }
+.interior-shell .small-empty { border-color: #a7b9ac; background: #eff3e5; }
+.interior-shell .empty-team-sprites { width: fit-content; margin-left: auto; margin-right: auto; border-bottom: 5px solid #8db69c; background: linear-gradient(transparent 65%, #e0edc8 65%); padding: 12px 25px 0; }
+.interior-shell .representative-note { color: #627184; }
+.interior-shell .welcome-track { border: 0; border-bottom: 5px solid #86b69c; border-radius: 8px 8px 0 0; background: linear-gradient(#d9eef7 72%, #d3e8b0 72%); }
+.interior-shell .school-welcome p { color: #5a7180; }
+
+/* Race setup, stadium scoreboard and results. */
+.interior-shell .race-setup-detail > .split-heading { border-bottom: 1px dashed #b5ad83; padding-bottom: 18px; }
+.interior-shell .selection-counter { background: #fff0bd; color: #826d3a; padding: 5px 15px; border: 1px solid #c5ad6a; border-radius: 5px; font-size: 19px; }
+.interior-shell .selection-counter b { color: var(--ink); font-weight: 700; }
+.interior-shell .tabs { background: #e9eddf; padding: 5px; border: 1px solid #b4baa5; border-radius: 6px; gap: 6px; }
+.interior-shell .tabs button { flex: 1; padding: 10px 4px; border: 0; border-radius: 4px; color: #52677a; }
+.interior-shell .tabs button.active { background: #ffe597; color: var(--ink); box-shadow: 0 2px 0 #877646; font-weight: 700; }
+.interior-shell .class-card { background: #fffdf4; border: 2px solid #aab9b2; border-radius: 5px; min-height: 107px; gap: 9px; }
+.interior-shell .class-card strong { font-weight: 700; }
+.interior-shell .class-card:hover { border-color: #6e8576; transform: translateY(-2px); }
+.interior-shell .class-card.selected { border-color: #435c65; color: var(--ink); background: #fff0b8; box-shadow: 0 3px 0 #435c65; }
+.interior-shell .class-kit { width: 28px; height: 18px; border-radius: 1px; clip-path: polygon(25% 0, 38% 8%, 62% 8%, 75% 0, 100% 25%, 83% 48%, 75% 39%, 75% 100%, 25% 100%, 25% 39%, 17% 48%, 0 25%); }
+.interior-shell .checkbox-visual { border: 1px solid #889d9b; background: #fffdf5; }
+.interior-shell .class-card.selected .checkbox-visual { background: #3f6d5f; color: #fff9e8; border-color: #3f6d5f; }
+.interior-shell .selected-classes { border-color: var(--line); }
+.interior-shell .selected-classes .chip { background: #ffeab1; border-color: #a58e58; }
+.interior-shell .event-card { background: #ffdc61; color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; box-shadow: 0 4px 0 var(--ink), inset 0 3px 0 #ffffff70; }
+.interior-shell .event-card:hover:not(:disabled) { background: #ffe68a; transform: translateY(-2px); }
+.interior-shell .event-card:disabled { opacity: 1; box-shadow: none; background: #e9eade; border-color: #a3adab; color: #657876; }
+.interior-shell .event-card.relay { background: #e7eae3; border-style: dashed; }
+.interior-shell .race-hint { color: #4d6c74; background: #eaf0e3; padding: 15px; margin-top: 22px; border-radius: 5px; }
+.interior-shell .race-hint span { color: #617580; }
+.interior-shell .race-history summary { color: var(--ink); }
+.interior-shell .race-header { padding: 20px 24px; background: var(--game-cream); border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--game-shadow); }
+.interior-shell .race-header h1 { font-size: clamp(23px, 2.5vw, 32px); }
+.interior-shell .race-clock { background: #294764; padding: 12px 22px; border: 2px solid #182e45; border-radius: 5px; min-width: 180px; box-shadow: inset 0 3px #ffffff12; }
+.interior-shell .race-clock > span { color: #dbe9e8; }
+.interior-shell .race-clock strong { color: #ffdc61; font-size: 56px; }
+.interior-shell .race-clock .live-dot { background: #b4e199; }
+.interior-shell .race-progress { height: 7px; border: 1px solid #547484; background: #e4eeee; }
+.interior-shell .race-progress i { background: #d9775d; }
+.interior-shell .race-stadium { border: 3px solid var(--ink); border-radius: 8px; box-shadow: var(--game-shadow); background: #dce5d1; }
+.interior-shell .race-stadium .track-viewport { border: 0; border-radius: 0; }
+.interior-shell .stadium-topline { border-bottom: 2px solid var(--ink); background: #d8edab; color: #32534e; font-size: 12px; font-weight: 700; }
+.interior-shell .stadium-topline b { color: #526b60; }
+.interior-shell .race-ready-overlay { background: #fff9e8f2; border: 2px solid var(--ink); box-shadow: 4px 4px 0 #263c594a; border-radius: 6px; color: var(--ink); text-shadow: none; }
+.interior-shell .race-ready-overlay .eyebrow { color: #677383; }
+.interior-shell .countdown-overlay strong { color: #ffdf69; text-shadow: 3px 3px 0 #263c59, -2px -2px 0 #263c59; }
+.interior-shell .pause-overlay { background: #294764f0; color: #fff9e8; border: 2px solid #172d44; border-radius: 6px; }
+.interior-shell .race-control-bar { padding-top: 18px; padding-bottom: 18px; }
+.interior-shell .speed-button { min-height: 36px; min-width: 36px; color: var(--ink); background: #f5f5e9; border: 1px solid #6c8c94; }
+.interior-shell .speed-button.active { border-color: var(--ink); background: #ffdc61; box-shadow: 0 2px 0 var(--ink); font-weight: 700; }
+.interior-shell .lane-card { background: var(--game-cream); border: 2px solid var(--ink); border-top: 6px solid var(--runner-color); border-radius: 5px; box-shadow: 2px 3px 0 #263c5938; padding: 14px 7px; }
+.interior-shell .lane-card:hover { background: #fff0c0; transform: translateY(-2px); }
+.interior-shell .lane-label { align-self: flex-start; color: #586f81; font-size: 10px; margin: 0 0 8px 1px; }
+.interior-shell .lane-label b { color: var(--ink); }
+.interior-shell .live-rank { background: #ffdc61; color: var(--ink); border: 1px solid #a88c43; top: 12px; right: 5px; }
+.interior-shell .runner-card-portrait { min-width: 60px; padding: 5px; margin: 0 0 7px; background: #e1eee3; border: 1px solid #a2b7a4; border-radius: 4px; }
+.interior-shell .runner-status-icons { left: calc(100% - 8px); }
+.interior-shell .runner-status-icon { background: #e7dbf8; color: #594477; border: 1px solid #7d6896; box-shadow: 1px 1px #263c5938; }
+.interior-shell .lane-card > strong { color: var(--ink); font-size: 12px; font-weight: 700; }
+.interior-shell .lane-card > small { color: #5c7480; }
+.interior-shell .lane-times { width: 100%; }
+.interior-shell .lane-times small { color: #5b7280; font-size: 9px; }
+.interior-shell .lane-times b { color: #415e70; font-size: 13px; }
+.interior-shell .lane-times .lane-current-time { border-color: #b9c9b9; margin-top: 2px; }
+.interior-shell .lane-times .lane-current-time b { color: #29735c; font-size: 17px; font-weight: 700; }
+.interior-shell .data-table .winner-row { background: #fff0bb; }
+.interior-shell .winner-row .place-number { background: #ffdc61; color: #6b4c1e; border: 1px solid #b99a4b; }
+.interior-shell .place-number { background: #e5ebe4; color: #496479; }
+.interior-shell .race-complete-hero { padding: 32px 20px; margin-bottom: 28px; background: #fff0bc; border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--game-shadow); }
+.interior-shell .race-complete-hero > svg { color: #ad7724; }
+.interior-shell .race-complete-hero h1 span { color: #b65b46; }
+.interior-shell .error-text { color: #a13e32; }
+
+/* Athlete cards keep the original green / yellow / red ability segments. */
+.interior-shell .student-dialog { background: var(--game-cream); color: var(--ink); border: 3px solid var(--ink); border-radius: 9px; box-shadow: 8px 8px 0 #172e4980, 0 25px 90px #18364f55; scrollbar-color: #9eafb3 var(--game-cream); }
+.interior-shell .student-dialog::backdrop { background: #203b5b9e; backdrop-filter: blur(4px); }
+.interior-shell .profile-header { background: #ddd3fa; padding-bottom: 18px; border-bottom: 2px solid var(--ink); }
+.interior-shell .profile-header p { color: #5d607a; }
+.interior-shell .dialog-close { width: 36px; height: 36px; border: 2px solid #645b82; border-radius: 5px; color: #514969; background: #fff9e8; box-shadow: 0 2px 0 #645b82; }
+.interior-shell .dialog-close:hover { color: var(--ink); background: #ffdc61; }
+.interior-shell .profile-avatar { background-color: #ddeeda; border: 2px solid #5b776d; border-radius: 5px; box-shadow: 3px 3px 0 #5b776d30; }
+.interior-shell .profile-name h2 > span { color: #826140; font-weight: 600; }
+.interior-shell .profile-name p, .interior-shell .student-id { color: #5c7180; }
+.interior-shell .profile-best > span, .interior-shell .profile-best > small { color: #5c7180; }
+.interior-shell .profile-best > strong { color: #2b735e; font-weight: 700; }
+.interior-shell .profile-basics { background: #e9efdf; border-color: #b8c4aa; border-radius: 5px; }
+.interior-shell .profile-basics > div { border-color: #bac8af; }
+.interior-shell .profile-basics span, .interior-shell .profile-basics small { color: #5d716d; }
+.interior-shell .profile-basics strong { color: var(--ink); font-weight: 700; }
+.interior-shell .profile-section-heading h3 { font-weight: 800; }
+.interior-shell .profile-section-heading > span, .interior-shell .attribute-label small, .interior-shell .attribute-row > b small { color: #657885; }
+.interior-shell .attribute-meter span { height: 11px; background: #e1e5d9; border: 1px solid #263c5924; }
+.interior-shell .attribute-row > b { color: #3b7555; font-weight: 700; }
+.interior-shell .attribute-row.ability-medium > b { color: #957022; }
+.interior-shell .attribute-row.ability-high > b { color: #b54d46; }
+.interior-shell .profile-prediction { background: #fff0bd; color: #85651f; border: 1px solid #cfb974; border-radius: 5px; }
+.interior-shell .profile-prediction strong { color: #654e23; }
+.interior-shell .profile-prediction p { color: #786d50; }
+.interior-shell .profile-ranks > div { background: #e9e1f5; border-color: #b0a1c4; border-radius: 5px; }
+.interior-shell .profile-ranks span { color: #706080; }
+.interior-shell .profile-ranks strong { color: #564071; font-weight: 700; }
+.interior-shell .profile-ranks strong small { color: #837195; }
+.interior-shell .profile-note { color: #667882; }
+.interior-shell .nickname-field > span { color: #4b6176; }
+.interior-shell .nickname-field small { color: #697d86; }
+.interior-shell .school-team-toggle { background: #e1eee0; border: 1px solid #93ae93; border-radius: 5px; }
+.interior-shell .school-team-toggle > div { color: #4d7768; }
+.interior-shell .school-team-toggle strong { color: #35594e; font-weight: 700; }
+.interior-shell .school-team-toggle small { color: #5c796e; }
+.interior-shell .switch-visual { background: #99aaa4; }
+.interior-shell .school-team-toggle input:checked + .switch-visual { background: #45876d; }
+.interior-shell .school-team-toggle input:checked + .switch-visual::after { background: #fff9e8; }
+.interior-shell .school-team-toggle input:focus-visible + .switch-visual { outline-color: #8254b3; }
+.interior-shell .representative-status > div { background: #f4f2e7; color: #627584; border-color: #b7c0b5; }
+.interior-shell .profile-history-empty { background: #edf0e5; color: #68806d; border-color: #a3b79b; }
+.interior-shell .profile-history-empty strong { color: #496750; }
+.interior-shell .individual-record { border-color: #b7c8b6; }
+.interior-shell .record-place, .interior-shell .individual-record > b { color: #357960; }
+.interior-shell .record-info strong { color: #3c596c; }
+.interior-shell .record-info span, .interior-shell .record-info small, .interior-shell .individual-record > b small { color: #607782; }
+.interior-shell .profile-footer { background: #fff9e8; border-top: 2px solid #bcc5b6; }
+.interior-shell .profile-error, .interior-shell .auth-error { color: #ad4137; }
+.interior-shell .profile-missing p { color: var(--muted); }
+
+/* Entry and feedback panels use the same palette. */
+.interior-shell .auth-panel { margin-top: clamp(30px, 10vh, 100px); padding: 30px; border-top: 8px solid #ddd3fa; }
+.interior-shell .auth-panel-heading { color: #766291; }
+.interior-shell .auth-loading { max-width: 520px; padding: 32px; margin: 60px auto; color: var(--muted); }
+.interior-shell .await-world { color: #4e7869; }
+.interior-shell .loading-card { background: #fff9e8; color: var(--ink); border: 2px solid var(--ink); box-shadow: var(--game-shadow); }
+.interior-shell .loading-card strong { color: var(--ink); }
+.interior-shell .loading-card p { color: var(--muted); }
+.interior-shell .loading-card .progress-line { background: #dae6d1; }
+.interior-shell .toast { background: #e2eec4; border: 2px solid #415b50; box-shadow: 3px 3px 0 #263c5940; color: #2f5944; }
+
+@media (max-width: 1150px) {
+  .interior-shell .content-view { padding-left: 22px; padding-right: 22px; }
+  .page-navigation { padding-left: 22px; padding-right: 22px; }
+  .interior-shell .school-layout, .interior-shell .race-setup-layout { grid-template-columns: 250px minmax(0, 1fr); gap: 18px; }
+  .interior-shell .lane-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .page-hero { gap: 18px; padding: 20px; }
+}
+@media (max-width: 800px) {
+  .interior-shell .school-layout, .interior-shell .race-setup-layout, .interior-shell .teams-layout { grid-template-columns: minmax(0, 1fr); }
+  .interior-shell .school-options { max-height: 235px; }
+  .interior-shell .team-list { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 210px; gap: 14px; overflow-x: auto; padding: 2px 5px 8px 0; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  .page-hero-extra { align-self: flex-end; }
+  .page-hero-portrait { width: 80px; height: 86px; }
+  .page-hero-portrait .pixel-runner { width: 72px; height: 72px; }
+  .interior-shell .school-welcome { min-height: 360px; }
+}
+@media (max-width: 580px) {
+  .interior-shell main { padding-bottom: 8px; }
+  .interior-shell .content-view { padding: 0 14px 22px; }
+  .page-navigation { padding: 14px 14px 16px; gap: 5px; }
+  .page-navigation-tabs { gap: 3px; }
+  .page-navigation button { min-height: 42px; gap: 5px; padding: 8px 7px; font-size: 11px; }
+  .page-navigation-tabs button > svg { display: none; }
+  .page-hero { flex-wrap: wrap; gap: 14px; padding: 16px; margin-bottom: 22px; }
+  .page-hero-portrait { width: 64px; height: 74px; }
+  .page-hero-portrait .pixel-runner { width: 60px; height: 60px; }
+  .page-hero-copy { flex: 1; }
+  .page-hero-copy h1 { font-size: 26px; margin: 5px 0; }
+  .page-hero-copy p { font-size: 11px; }
+  .page-hero-copy .eyebrow { font-size: 9px; }
+  .page-hero-extra { width: 100%; margin: 0; padding-top: 10px; border-top: 1px dashed #263c5940; }
+  .page-hero-extra .badge { font-size: 10px; }
+  .interior-shell .school-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .interior-shell .stat-card strong { font-size: 28px; }
+  .interior-shell .school-race-link { margin-left: 0; }
+  .interior-shell .class-picker .chip { min-height: 40px; }
+  .interior-shell .pagination { flex-wrap: wrap; }
+  .interior-shell .pagination .btn { min-width: 40px; min-height: 40px; }
+  .interior-shell .roster-toolbar label { width: 100%; justify-content: space-between; }
+  .interior-shell .table-wrap { overscroll-behavior-x: contain; }
+  .interior-shell .data-table td, .interior-shell .data-table th { padding: 10px 12px; }
+  .interior-shell .team-detail > .split-heading h2 { font-size: 22px; }
+  .interior-shell .team-list { grid-auto-columns: 185px; }
+  .interior-shell .team-list-card { padding: 14px; }
+  .interior-shell .team-emblem { width: 36px; height: 36px; margin-bottom: 10px; }
+  .interior-shell .team-list-footer { padding-top: 10px; margin-top: 12px; }
+  .interior-shell .class-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .interior-shell .class-card { padding: 14px 8px; min-height: 105px; }
+  .interior-shell .event-buttons { grid-template-columns: 1fr; }
+  .interior-shell .event-card { padding: 18px 14px; }
+  .interior-shell .event-card > svg:first-child { display: block; }
+  .interior-shell .race-header { padding: 16px; gap: 14px; align-items: center; }
+  .interior-shell .race-header > div:first-child { min-width: 0; }
+  .interior-shell .race-header .eyebrow { font-size: 8px; letter-spacing: .025em; flex-wrap: wrap; gap: 4px; }
+  .interior-shell .race-clock { min-width: 110px; padding: 10px; }
+  .interior-shell .race-clock strong { font-size: 38px; }
+  .interior-shell .race-clock strong small { font-size: 17px; }
+  .interior-shell .race-stadium .stadium-topline { font-size: 10px; }
+  .interior-shell .race-ready-overlay { top: calc(50% + 18px); padding: 7px 12px; gap: 4px; }
+  .interior-shell .race-ready-overlay > strong { font-size: 18px; margin: 0; }
+  .interior-shell .race-ready-overlay .btn { min-height: 32px; padding: 5px 10px; }
+  .interior-shell .lane-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .interior-shell .lane-card { padding: 12px; }
+  .interior-shell .lane-card .pixel-runner { width: 48px; height: 48px; }
+  .interior-shell .lane-label { font-size: 11px; }
+  .interior-shell .live-rank { font-size: 9px; right: 9px; }
+  .interior-shell .lane-times b { font-size: 15px; }
+  .interior-shell .lane-times small { font-size: 10px; }
+  .interior-shell .lane-times .lane-current-time b { font-size: 19px; }
+  .interior-shell .results-action { flex-wrap: wrap; }
+  .interior-shell .student-dialog .profile-best { border-color: #bbcab7; }
+  .interior-shell .student-dialog .profile-basics > div:nth-child(4) { border-right: 0; }
+  .interior-shell .profile-ranks strong { font-size: clamp(12px, 3.6vw, 18px); }
+  .interior-shell .auth-panel { margin: 30px 14px 0; padding: 24px; }
+  .interior-shell .auth-loading { margin: 30px 14px; }
+}
