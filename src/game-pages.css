@@ -200,16 +200,18 @@
 .interior-shell .speed-button.active { border-color: var(--ink); background: #ffdc61; box-shadow: 0 2px 0 var(--ink); font-weight: 700; }
 .interior-shell .lane-card { background: var(--game-cream); border: 2px solid var(--ink); border-top: 6px solid var(--runner-color); border-radius: 5px; box-shadow: 2px 3px 0 #263c5938; padding: 14px 7px; }
 .interior-shell .lane-card:hover { background: #fff0c0; transform: translateY(-2px); }
-.interior-shell .lane-label { align-self: flex-start; color: #586f81; font-size: 10px; margin: 0 0 8px 1px; }
-.interior-shell .lane-label b { color: var(--ink); }
-.interior-shell .live-rank { background: #ffdc61; color: var(--ink); border: 1px solid #a88c43; top: 12px; right: 5px; }
+.interior-shell .lane-label { flex-shrink: 0; color: #586f81; font-size: 10px; letter-spacing: 0; margin: 0; white-space: nowrap; }
+.interior-shell .lane-label b { color: var(--ink); margin-left: 2px; }
+.interior-shell .live-rank { background: #ffdc61; color: var(--ink); border: 1px solid #a88c43; }
 .interior-shell .lane-card-name { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 .interior-shell .gender-icon { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid currentColor; }
 .interior-shell .gender-male { color: #39759a; background: #d9edf6; }
 .interior-shell .gender-female { color: #aa5870; background: #f8dce3; }
 .interior-shell .runner-card-portrait { min-width: 60px; padding: 5px; margin: 0 0 7px; background: #e1eee3; border: 1px solid #a2b7a4; border-radius: 4px; }
-.interior-shell .runner-status-icons { left: calc(100% - 8px); }
-.interior-shell .runner-status-icon { background: #e7dbf8; color: #594477; border: 1px solid #7d6896; box-shadow: 1px 1px #263c5938; }
+.interior-shell .runner-identity-icon { box-shadow: 1px 1px 0 #9a431326; }
+.interior-shell .school-team-status { background: #ffe3a2; color: #873710; border-color: #bd6226; }
+.interior-shell .city-team-status { background: #ffd6bc; color: #963e20; border-color: #c46640; }
+.interior-shell .national-team-status { background: #ffe59a; color: #7e480c; border-color: #b77a1b; }
 .interior-shell .lane-card > strong { color: var(--ink); font-size: 12px; font-weight: 700; }
 .interior-shell .lane-card > small { color: #5c7480; }
 .interior-shell .lane-times { width: 100%; }
@@ -352,7 +354,7 @@
   .interior-shell .lane-card { padding: 12px; }
   .interior-shell .lane-card .pixel-runner { width: 48px; height: 48px; }
   .interior-shell .lane-label { font-size: 11px; }
-  .interior-shell .live-rank { font-size: 9px; right: 9px; }
+  .interior-shell .live-rank { font-size: 9px; }
   .interior-shell .lane-times b { font-size: 15px; }
   .interior-shell .lane-times small { font-size: 10px; }
   .interior-shell .lane-times .lane-current-time b { font-size: 19px; }

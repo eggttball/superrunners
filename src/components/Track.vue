@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 
       <g v-for="runner in displayedRunners" :key="runner.id" :transform="runnerTransform(runner)" :data-lane="runner.lane" :data-distance="runner.distance" :opacity="runner.opacity ?? 1">
         <title>{{ runner.name }} · 第 {{ runner.lane }} 道</title>
-        <g v-if="raceMode" class="race-runner-lane" transform="translate(-3.9 -3.6)" aria-hidden="true">
+        <g v-if="raceMode && animated" class="race-runner-lane" transform="translate(-3.05 .45)" aria-hidden="true">
           <rect x="-.2" y="-.1" width="2.7" height="2.2" rx=".25" />
           <text x="1.15" y="1.52">{{ runner.lane }}</text>
         </g>
