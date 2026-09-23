@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { game, go } from '../lib/game.js'
 import { catalog, catalogSource } from '../data/schools.js'
-import Track from './Track.vue'
+import TrackExplorer from './TrackExplorer.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
 import '../home.css'
@@ -33,7 +33,7 @@ const stats = computed(() => {
           <span class="playfield-weather"><Icon name="sun" :size="18" />晴天，適合開跑！</span>
         </header>
         <div class="playfield-scene">
-          <Track :animated="true" arcade />
+          <TrackExplorer />
         </div>
         <div class="playfield-caption"><span><span class="game-live-dot" aria-hidden="true"></span>今天，也要比昨天更快一點。</span><span class="playfield-spec">400m <b>×</b> 8 跑道</span></div>
       </section>

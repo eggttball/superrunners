@@ -21,6 +21,14 @@ export const TRACK = Object.freeze({
   viewBox: `${-outerRadius - 10} ${-outerRadius - 14} ${straightLength + 2 * outerRadius + 20} ${2 * outerRadius + 28}`,
 })
 
+// Include the pixel trees and their shadows in the home camera's full view.
+export const HOME_TRACK_VIEW = Object.freeze({
+  x: -outerRadius - 12,
+  y: -outerRadius - 12,
+  width: straightLength + 2 * outerRadius + 24,
+  height: 2 * outerRadius + 24,
+})
+
 function validLane(lane) {
   const number = Number(lane)
   return Number.isFinite(number) ? Math.min(laneCount, Math.max(1, Math.round(number))) : 1

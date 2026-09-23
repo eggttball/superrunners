@@ -1,13 +1,14 @@
 <script setup vapor>
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import PixelRunner from './PixelRunner.vue'
-import { TRACK, lapPoint, ovalPath, sprintPoint } from '../lib/track-geometry.js'
+import { TRACK, HOME_TRACK_VIEW, lapPoint, ovalPath, sprintPoint } from '../lib/track-geometry.js'
 
 const props = defineProps({
   runners: { type: Array, default: () => [] },
   animated: { type: Boolean, default: true },
   raceMode: { type: Boolean, default: false },
   arcade: { type: Boolean, default: false },
+  cameraViewBox: { type: String, default: '' },
 })
 
 const prefix = `track-${useId().replaceAll(':', '')}`
@@ -28,11 +29,7 @@ const sprintViewBox = [
   TRACK.outerRadius - TRACK.innerRadius + 22,
 ].join(' ')
 const arcadeViewBox = [
-  // Leave room for the pixel trees and their shadows beyond the outer lane.
-  -TRACK.outerRadius - 12,
-  -TRACK.outerRadius - 12,
-  TRACK.straightLength + 2 * TRACK.outerRadius + 24,
-  2 * TRACK.outerRadius + 24,
+  HOME_TRACK_VIEW.x, HOME_TRACK_VIEW.y, HOME_TRACK_VIEW.width, HOME_TRACK_VIEW.height,
 ].join(' ')
 const trees = [
   [-49, -23, 1.05], [-49, 13, 0.8], [-31, -47, 1], [8, -53, 0.9],
@@ -117,7 +114,7 @@ onBeforeUnmount(() => {
   <div class="track-viewport" :class="{ 'is-race': raceMode, 'is-arcade': arcade }">
     <svg
       class="track-svg"
-      :viewBox="raceMode ? sprintViewBox : arcade ? arcadeViewBox : TRACK.viewBox"
+      :viewBox="raceMode ? sprintViewBox : cameraViewBox || (arcade ? arcadeViewBox : TRACK.viewBox)"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       :aria-label="raceMode ? '放大的八道 100 公尺直線賽道，由左向右起跑，終點後設有減速區' : '八道 400 公尺田徑場鳥瞰圖，像素跑者正在練習，附設 100 公尺直道'"
