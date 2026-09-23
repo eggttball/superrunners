@@ -73,6 +73,13 @@ export function useTrackCamera(surface) {
     placeAnchor(worldPoint(point), point, camera.zoom * factor)
   }
 
+  function panByWheel(deltaX, deltaY) {
+    if (!size.width || !size.height) return
+    setCamera(camera.zoom,
+      camera.x - deltaX / size.width * frame.value.width / camera.zoom,
+      camera.y - deltaY / size.height * frame.value.height / camera.zoom)
+  }
+
   function pointerGeometry() {
     const [first, second] = pointers.values()
     if (!first) return null
@@ -177,6 +184,15 @@ export function useTrackCamera(surface) {
     if (pointers.size) return
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? size.height : 1
     const delta = event.deltaY * unit
+    // Mac trackpad two-finger scrolling arrives as high-resolution, pixel-mode
+    // wheel events (often with both axes). Treat that as canvas panning. A
+    // ctrl-wheel is the browser's trackpad pinch gesture, so it remains zoom.
+    const smoothTrackpad = event.deltaMode === 0 && !event.ctrlKey
+      && (Math.abs(event.deltaX) > 0 || Math.abs(event.deltaY) < 50)
+    if (smoothTrackpad) {
+      panByWheel(event.deltaX, event.deltaY)
+      return
+    }
     const exponent = clamp(-delta * (event.ctrlKey ? .01 : .002), -.6, .6)
     zoomAt(Math.exp(exponent), localPoint(event))
   }
