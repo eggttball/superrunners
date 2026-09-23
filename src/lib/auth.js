@@ -3,12 +3,12 @@ import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, s
 import { initializeApp } from 'firebase/app'
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyB2vKKFLzFYRmIwFDCCsW1lEt-j_r4-LQ4',
-  authDomain: 'egg-supperrunners.firebaseapp.com',
-  projectId: 'egg-supperrunners',
-  storageBucket: 'egg-supperrunners.firebasestorage.app',
-  messagingSenderId: '1041092063845',
-  appId: '1:1041092063845:web:2a7ad1b91cfa60e9388c8c',
+  apiKey: 'AIzaSyCJ5p1htMhprUyISvv9tE_gQNduXTlDdw4',
+  authDomain: 'superrunners.firebaseapp.com',
+  projectId: 'superrunners',
+  storageBucket: 'superrunners.firebasestorage.app',
+  messagingSenderId: '928153234245',
+  appId: '1:928153234245:web:bd27a848ea352256feac2c',
 }
 
 // This is a private single-user application. Create this account in Firebase Console.
