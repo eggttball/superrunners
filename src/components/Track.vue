@@ -210,6 +210,10 @@ onBeforeUnmount(() => {
 
       <g v-for="runner in displayedRunners" :key="runner.id" :transform="runnerTransform(runner)" :data-lane="runner.lane" :data-distance="runner.distance" :opacity="runner.opacity ?? 1">
         <title>{{ runner.name }} · 第 {{ runner.lane }} 道</title>
+        <g v-if="raceMode" class="race-runner-lane" transform="translate(-3.9 -3.6)" aria-hidden="true">
+          <rect x="-.2" y="-.1" width="2.7" height="2.2" rx=".25" />
+          <text x="1.15" y="1.52">{{ runner.lane }}</text>
+        </g>
         <PixelRunner :seed="String(runner.id)" :gender="runner.gender" :height="runner.height" :weight="runner.weight" :speed="runner.speed" :facing="runner.facing" :color="runner.color || '#e3ee94'" :running="runner.moving" :size="runnerSize" :backdrop="false" />
       </g>
     </svg>
@@ -225,6 +229,8 @@ onBeforeUnmount(() => {
 .arcade-field-title .field-title-shadow { fill: #347359; }
 .arcade-field-title .field-title-sub { font-size: 1.9px; letter-spacing: .75px; fill: #dcf0cf; }
 .lane-number { font-family: ui-monospace, monospace; font-size: 1.02px; font-weight: 800; text-anchor: middle; fill: #fff2d9; }
+.race-runner-lane rect { fill: #294764; stroke: #ffdc61; stroke-width: .16; }
+.race-runner-lane text { font-family: ui-monospace, monospace; font-size: 1.35px; font-weight: 900; text-anchor: middle; fill: #fff6de; }
 .line-sign rect { fill: #294f3d; }
 .line-sign text { font-family: sans-serif; font-size: 1.65px; font-weight: 700; text-anchor: middle; letter-spacing: .04px; fill: #f8f2dd; }
 .distance-mark path { fill: none; stroke: #6b8060; stroke-width: .16; }
