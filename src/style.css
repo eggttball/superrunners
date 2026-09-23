@@ -17,7 +17,7 @@
   --mono: 'Barlow Condensed', 'Arial Narrow', ui-monospace, monospace;
 }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 360px; }
+body { margin: 0; min-width: 360px; background-color: var(--bg); background-image: linear-gradient(#ffffff04 1px, transparent 1px), linear-gradient(90deg, #ffffff04 1px, transparent 1px); background-size: 24px 24px; }
 button, input, select, textarea { font: inherit; }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; cursor: pointer; }
@@ -38,7 +38,7 @@ small { font-size: 11px; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: #526451; border-radius: 5px; }
 .app-shell { min-height: 100vh; background-image: radial-gradient(ellipse at 75% 10%, #2e4b2626, transparent 52%); }
-.topbar { height: 92px; padding: 0 3.8%; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 30px; }
+.topbar { height: 72px; padding: 0 3.8%; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 20px; background: #111d19e8; }
 .wordmark { border: 0; background: none; display: flex; align-items: center; gap: 11px; text-align: left; padding: 0; flex-shrink: 0; }
 .brand-mark { width: 40px; height: 40px; fill: var(--accent); }
 .wordmark > span { font-family: var(--mono); font-size: 24px; font-weight: 800; line-height: .9; letter-spacing: .02em; }
@@ -77,22 +77,22 @@ small { font-size: 11px; }
 .badge { display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; letter-spacing: .03em; color: #b9c7b5; background: #b9c7b50b; border: 1px solid #b9c7b519; padding: 5px 9px; border-radius: 4px; white-space: nowrap; }
 .badge.green { color: var(--accent); border-color: #c7f36a25; background: #c7f36a0a; }
 .heading-dot { color: var(--accent); margin-left: 4px; }
-.home-view, .content-view { max-width: 1600px; margin: auto; padding: 38px 3.8% 26px; }
-.home-intro { display: flex; align-items: center; justify-content: space-between; gap: 25px; margin-bottom: 30px; }
-.home-intro h1 { font-size: clamp(29px, 3.2vw, 47px); margin: 13px 0 12px; font-weight: 800; letter-spacing: -.04em; }
+.home-view, .content-view { max-width: 1600px; margin: auto; padding: 20px 3.8% 26px; }
+.home-intro { display: flex; align-items: center; justify-content: space-between; gap: 25px; margin-bottom: 15px; }
+.home-intro h1 { font-family: var(--mono); font-size: clamp(26px, 2.7vw, 40px); margin: 8px 0 7px; font-weight: 800; letter-spacing: -.04em; }
 .home-intro h1 > span:not(.title-dot) { color: var(--accent); }
 .title-dot { color: var(--accent); margin-left: 5px; }
 .mobile-break { display: none; }
-.home-description { color: var(--muted); font-size: 12px; letter-spacing: .05em; }
-.season-stamp { width: 150px; border-left: 1px solid #a7b5a22b; padding-left: 24px; flex-shrink: 0; transform: rotate(-3deg); margin-right: 8px; }
-.season-stamp span { font-family: var(--mono); font-size: 55px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: #dfebcf; display: block; }
+.home-description { color: var(--muted); font-size: 11px; letter-spacing: .05em; }
+.season-stamp { width: 125px; border-left: 1px solid #a7b5a22b; padding-left: 17px; flex-shrink: 0; transform: rotate(-3deg); margin-right: 8px; }
+.season-stamp span { font-family: var(--mono); font-size: 42px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: #dfebcf; display: block; }
 .season-stamp strong { display: block; font-family: var(--mono); font-size: 15px; font-weight: 500; letter-spacing: .16em; margin: 5px 0; }
 .season-stamp small { color: var(--muted); font-size: 9px; }
-.stadium-card { position: relative; border: 1px solid #ffffff1a; border-radius: 11px; overflow: hidden; background: #203329; }
+.stadium-card { position: relative; border: 2px solid #9fc87055; border-radius: 8px; overflow: hidden; background: #203329; box-shadow: 6px 6px 0 #0a1510, 0 0 0 1px #0b1710; }
 .stadium-topline { display: flex; justify-content: space-between; align-items: center; min-height: 42px; padding: 10px 20px; background: #23372b; color: #e5e6d5; font-size: 10px; letter-spacing: .06em; }
 .stadium-topline > span { display: flex; align-items: center; gap: 9px; }
 .stadium-topline b { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .12em; color: #93a289; margin-left: 8px; }
-.stadium-stage { position: relative; overflow: hidden; height: clamp(330px, 38.5vw, 585px); background: #dce5d1; }
+.stadium-stage { position: relative; overflow: hidden; height: clamp(350px, 42vw, 610px); background: #dce5d1; }
 .stadium-stage .track-viewport, .stadium-stage .track-svg { height: 100%; width: 100%; }
 .stadium-inscription { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; color: #e8eed3; }
 .stadium-inscription > span { font-family: var(--mono); font-size: clamp(6px, .75vw, 10px); letter-spacing: .26em; white-space: nowrap; opacity: .6; }
@@ -110,9 +110,9 @@ small { font-size: 11px; }
 .menu-section-heading .eyebrow { font-size: 11px; color: #e7ebda; }
 .menu-section-heading .muted { font-size: 10px; }
 .home-menu { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
-.menu-card { position: relative; padding: 20px 16px 17px; background: #24352a; border: 1px solid #a8bd931a; border-radius: 8px; text-align: left; min-height: 151px; box-shadow: 0 8px 20px #06110b13; }
+.menu-card { position: relative; padding: 20px 16px 17px; background: #24352a; border: 2px solid #a8bd9330; border-radius: 5px; text-align: left; min-height: 151px; box-shadow: 4px 4px 0 #0a1510; }
 .menu-card:hover:not(:disabled) { background: #2b4030; transform: translateY(-5px); border-color: #c7f36a60; box-shadow: 0 12px 20px #06110b33; }
-.menu-card:not(:disabled) { animation: menu-float 5s ease-in-out infinite; }
+.menu-card:not(:disabled) { animation: menu-float 4s steps(4, end) infinite; }
 .menu-card:nth-child(2) { animation-delay: -.8s; }
 .menu-card:nth-child(3) { animation-delay: -1.6s; }
 .menu-card:hover, .menu-card:focus-visible { animation-play-state: paused; }

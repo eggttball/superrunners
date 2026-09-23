@@ -10,7 +10,6 @@ import StudentDialog from './components/StudentDialog.vue'
 import Icon from './components/Icon.vue'
 import AuthPanel from './components/AuthPanel.vue'
 
-const labels = { home: '田徑基地', schools: '學校資料', teams: '我的隊伍', race: '校內比賽' }
 const progressLabel = computed(() => ({ population: '正在建立全國班級與學生', ranking: '正在計算全國能力排名', complete: '全國資料生成完成' }[game.phase] || game.phase))
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
@@ -30,19 +29,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'arcade-shell': game.tab === 'home' && authState.user }">
     <header class="topbar">
       <button class="wordmark" @click="go('home')" aria-label="Super Runners 首頁">
         <svg viewBox="0 0 32 32" class="brand-mark" aria-hidden="true"><path d="M18 2h6v6h-6zm-6 8h10v4h-5v5h-5zm-5 1h5v4H7zm14 3h5v4h-5zm-9 5h5v5h-5zm-6 5h6v4H6zm12-5h5v8h-5z" /></svg>
-        <span>SUPER<span class="brand-light">RUNNERS</span><small>校園田徑經理</small></span>
+        <span>SUPER<span class="brand-light">RUNNERS</span></span>
       </button>
-      <nav v-if="authState.user" class="main-nav" aria-label="主要選單">
-        <button v-for="(label, tab) in labels" :key="tab" :class="{ active: game.tab === tab }" @click="go(tab)">{{ label }}</button>
-      </nav>
       <div v-if="authState.user" class="topbar-tools">
         <span class="save-status"><i :class="{ pulsing: game.saving || !game.ready }"></i>{{ game.saving ? '保存中' : game.ready ? '本機已存檔' : '建立世界中' }}</span>
         <button class="icon-button" @click="toggleMusic" :disabled="!game.ready" :aria-label="game.muted ? '開啟背景音樂' : '靜音背景音樂'" :title="game.muted ? '開啟背景音樂' : '靜音背景音樂'"><Icon :name="game.muted ? 'muted' : 'sound'" /></button>
-        <button v-if="authState.user" class="auth-user" @click="logout" :title="`登出 ${authState.user.email}`"><span class="auth-avatar">{{ (authState.user.email || '?')[0].toUpperCase() }}</span><span class="auth-email">{{ authState.user.email }}</span><small>登出</small></button>
+        <button v-if="authState.user" class="auth-user" @click="logout" title="登出" aria-label="登出"><Icon name="user" :size="16" /><span>登出</span></button>
         <button class="btn small export-button" @click="downloadSave" :disabled="!game.ready || game.exportBusy || game.saving"><Icon name="download" :size="16" /><span>{{ game.exportBusy ? '正在匯出…' : '匯出存檔' }}</span></button>
       </div>
     </header>
