@@ -61,6 +61,13 @@ const finishRanks = computed(() => {
     .sort((a, b) => a.time - b.time || a.lane - b.lane)
   return new Map(finished.map((runner, index) => [runner.id, index + 1]))
 })
+function rankClass(rank) {
+  if (rank === 1) return 'rank-first'
+  if (rank === 2) return 'rank-second'
+  if (rank === 3) return 'rank-third'
+  return ''
+}
+
 const runners = computed(() => {
   const now = Math.max(0, elapsed.value)
   return athletes.value.map((athlete, index) => {
@@ -79,12 +86,6 @@ const results = computed(() => athletes.value.map((athlete, index) => ({ ...athl
 const records = computed(() => { game.revision; return game.world.races.filter(race => race.schoolId === selectedSchoolId.value).sort((a, b) => b.finishedAt.localeCompare(a.finishedAt)) })
 const sessionRecords = computed(() => { game.revision; return game.world.races.filter(race => race.sessionId === sessionId.value) })
 const sessionResults = computed(() => sessionRecords.value.flatMap(race => race.results).sort((a, b) => a.time - b.time))
-const phaseLabel = computed(() => {
-  if (phase.value === 'running' && paused.value) return '比賽暫停'
-  if (phase.value === 'running' && elapsed.value >= maxTime.value) return '衝線減速中'
-  return ({ ready: '準備起跑', countdown: '預備', running: '比賽進行中', saving: '正在保存成績', saveerror: '等待保存', heatdone: '本組完賽', complete: '賽事完成' })[phase.value]
-})
-
 watch(selectedSchoolId, value => { selectedClasses.value = []; game.schoolId = value; grade.value = 1 })
 
 function selectClass(id) {
@@ -211,10 +212,9 @@ onUnmounted(() => { cancelAnimationFrame(frame); setMusicMode('ambient') })
     </template>
 
     <template v-else-if="phase !== 'complete'">
-      <div class="race-header"><div><span class="eyebrow">LIVE SCHOOL MEET <span class="eyebrow-separator">/</span> 100m SPRINT</span><h1>{{ school.name }}<span class="heading-dot">.</span></h1><p class="muted">{{ currentClass.name }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組 <span class="dim">/</span> 全程 {{ heatIndex + 1 }} / {{ queue.length }} 組</p></div><div class="race-clock"><span><span class="live-dot" :class="{ pulsing: phase === 'running' && !paused }"></span>{{ phaseLabel }}</span><strong>{{ timeText(Math.min(maxTime, Math.max(0, elapsed))) }}<small>s</small></strong></div></div>
+      <div class="race-header"><div><h1>{{ school.name }}<span class="heading-dot">.</span></h1><p class="muted">{{ currentClass.name }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組</p></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, elapsed))) }}<small>s</small></strong></div></div>
       <div class="race-progress"><i :style="{ width: (heatIndex / queue.length * 100) + '%' }"></i></div>
-      <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><span class="muted">起點 → 終點 · 最下方直道</span></div><Track :runners="runners" :animated="phase === 'running' && !paused" race-mode /><div v-if="phase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="phase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="paused" class="pause-overlay">PAUSED<span>比賽已暫停</span></div></div>
-      <div class="race-control-bar"><span class="muted"><Icon name="clock" :size="17" /> 完賽時間依選手能力計算，播放速度不影響紀錄。</span><div class="race-controls"><button v-for="rate in [1, 2, 4]" :key="rate" class="speed-button" :class="{ active: speed === rate }" @click="speed = rate">{{ rate }}×</button><button v-if="phase === 'running' || phase === 'countdown'" class="btn small" @click="paused = !paused"><Icon :name="paused ? 'play' : 'pause'" :size="16" />{{ paused ? '繼續' : '暫停' }}</button></div></div>
+      <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><div class="race-topline-controls"><button v-if="phase === 'heatdone'" class="btn small primary next-heat-button" @click="nextHeat">{{ heatIndex + 1 === queue.length ? '查看總結' : '下一組' }}<Icon name="arrow" :size="16" /></button><button v-if="phase === 'saveerror'" class="btn small primary" @click="finishHeat">重試保存</button><button v-if="phase === 'running' || phase === 'countdown'" class="btn small" @click="paused = !paused"><Icon :name="paused ? 'play' : 'pause'" :size="16" />{{ paused ? '繼續' : '暫停' }}</button><button v-for="rate in [1, 2, 4]" :key="rate" class="speed-button" :class="{ active: speed === rate }" @click="speed = rate">{{ rate }}×</button></div></div><Track :runners="runners" :animated="phase === 'running' && !paused" :paused="phase === 'running' && paused" race-mode /><div v-if="phase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="phase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="paused" class="pause-overlay">PAUSED<span>比賽已暫停</span></div></div>
       <div class="lane-cards">
         <button v-for="(athlete, index) in athletes" :key="athlete.student.id" class="lane-card" @click="game.studentId = athlete.student.id" :style="{ '--runner-color': currentClass.color }">
           <span class="lane-label">LANE <b>{{ index + 1 }}</b></span>
@@ -227,13 +227,12 @@ onUnmounted(() => { cancelAnimationFrame(frame); setMusicMode('ambient') })
             <span><small>預估</small><b class="mono">{{ timeText(athlete.student.baseline100) }}s</b></span>
             <span><small>最佳</small><b class="mono">{{ athlete.student.best100 === null ? '尚無' : timeText(athlete.student.best100) + 's' }}</b></span>
             <span class="lane-current-time">
-              <small><span v-if="finishRanks.has(athlete.student.id)" class="live-rank">第 {{ finishRanks.get(athlete.student.id) }} 名</span><template v-else>本次</template></small>
+              <small><span v-if="finishRanks.has(athlete.student.id)" class="live-rank" :class="rankClass(finishRanks.get(athlete.student.id))">第 {{ finishRanks.get(athlete.student.id) }} 名</span><template v-else>本次</template></small>
               <b class="mono">{{ elapsed >= athlete.profile.time ? timeText(athlete.profile.time) + 's' : '—' }}</b>
             </span>
           </span>
         </button>
       </div>
-      <div v-if="phase === 'saving' || phase === 'heatdone' || phase === 'saveerror'" class="panel heat-results"><div class="split-heading"><div><span class="eyebrow">HEAT RESULTS</span><h2>每一步，都算數。</h2><p class="muted">{{ currentClass.name }} · 第 {{ current.heat }} 組成績</p></div><span v-if="phase === 'heatdone'" class="badge green"><Icon name="check" :size="15" />成績已存檔</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>道次</th><th>選手</th><th>學號</th><th>完成秒數</th></tr></thead><tbody><tr v-for="(result, index) in results" :key="result.id" :class="{ 'winner-row': index === 0 }"><td><span class="place-number">{{ index + 1 }}</span></td><td>{{ result.lane }}</td><td><button class="student-link" @click="game.studentId = result.id"><PixelRunner :seed="result.id" :gender="result.gender" :height="result.height" :weight="result.weight" :color="result.color" :size="30" />{{ result.name }}</button></td><td class="mono">{{ result.studentNumber }}</td><td class="mono result-time">{{ timeText(result.time) }} <small>s</small></td></tr></tbody></table></div><div class="results-action"><p class="muted">{{ phase === 'saving' ? '正在保存本組紀錄…' : phase === 'saveerror' ? '本組尚未保存，請重試後再繼續。' : current.heat === current.totalHeats ? '全班已完賽，前三名獎牌已加入學校紀錄。' : '下一組選手，準備上場。' }}</p><button v-if="phase === 'heatdone'" class="btn primary" @click="nextHeat">{{ heatIndex + 1 === queue.length ? '查看賽事總結' : '下一組' }}<Icon name="arrow" :size="18" /></button><button v-if="phase === 'saveerror'" class="btn primary" @click="finishHeat">重試保存</button></div><p v-if="saveError" class="error-text" role="alert">{{ saveError }}。請勿離開此畫面。</p></div>
       <p class="data-note">切換選單會結束目前未完成的賽程；已完賽的組別與成績會保留。</p>
     </template>
 

@@ -6,6 +6,7 @@ import { TRACK, HOME_TRACK_VIEW, lapPoint, ovalPath, sprintPoint } from '../lib/
 const props = defineProps({
   runners: { type: Array, default: () => [] },
   animated: { type: Boolean, default: true },
+  paused: { type: Boolean, default: false },
   raceMode: { type: Boolean, default: false },
   arcade: { type: Boolean, default: false },
   cameraViewBox: { type: String, default: '' },
@@ -27,7 +28,7 @@ const sprintViewBox = [
   TRACK.sprintStartX - 8,
   TRACK.innerRadius - 9,
   TRACK.sprintFinishX - TRACK.sprintStartX + 24,
-  TRACK.outerRadius - TRACK.innerRadius + 22,
+  TRACK.outerRadius - TRACK.innerRadius + 19,
 ].join(' ')
 const arcadeViewBox = [
   HOME_TRACK_VIEW.x, HOME_TRACK_VIEW.y, HOME_TRACK_VIEW.width, HOME_TRACK_VIEW.height,
@@ -60,7 +61,7 @@ const displayedRunners = computed(() => {
     return props.runners.map((runner) => ({
       ...runner,
       point: sprintPoint(runner.distance, runner.lane),
-      moving: props.animated && Number(runner.speed) > 0.05 && Number(runner.opacity ?? 1) > 0 && !reducedMotion.value,
+      moving: (props.animated || props.paused) && Number(runner.speed) > 0.05 && Number(runner.opacity ?? 1) > 0 && !reducedMotion.value,
     }))
   }
   return ambient.map((runner) => {
@@ -210,11 +211,11 @@ onBeforeUnmount(() => {
 
       <g v-for="runner in displayedRunners" :key="runner.id" :transform="runnerTransform(runner)" :data-lane="runner.lane" :data-distance="runner.distance" :opacity="runner.opacity ?? 1">
         <title>{{ runner.name }} · 第 {{ runner.lane }} 道</title>
-        <g v-if="raceMode && animated" class="race-runner-lane" transform="translate(-3.05 .45)" aria-hidden="true">
+        <g v-if="raceMode && (animated || paused)" class="race-runner-lane" transform="translate(-3.05 .45)" aria-hidden="true">
           <rect x="-.2" y="-.1" width="2.7" height="2.2" rx=".25" />
           <text x="1.15" y="1.52">{{ runner.lane }}</text>
         </g>
-        <PixelRunner :seed="String(runner.id)" :gender="runner.gender" :height="runner.height" :weight="runner.weight" :speed="runner.speed" :facing="runner.facing" :color="runner.color || '#e3ee94'" :running="runner.moving" :size="runnerSize" :backdrop="false" />
+        <PixelRunner :seed="String(runner.id)" :gender="runner.gender" :height="runner.height" :weight="runner.weight" :speed="runner.speed" :facing="runner.facing" :color="runner.color || '#e3ee94'" :running="runner.moving" :paused="paused" :size="runnerSize" :backdrop="false" />
       </g>
     </svg>
   </div>

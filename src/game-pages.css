@@ -179,11 +179,12 @@
 .interior-shell .race-hint { color: #4d6c74; background: #eaf0e3; padding: 15px; margin-top: 22px; border-radius: 5px; }
 .interior-shell .race-hint span { color: #617580; }
 .interior-shell .race-history summary { color: var(--ink); }
-.interior-shell .race-header { padding: 20px 24px; background: var(--game-cream); border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--game-shadow); }
-.interior-shell .race-header h1 { font-size: clamp(23px, 2.5vw, 32px); }
+.interior-shell .race-header { padding: 10px 24px; background: var(--game-cream); border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--game-shadow); }
+.interior-shell .race-header h1 { font-size: clamp(21px, 2.15vw, 27px); }
+.interior-shell .race-header p { font-size: 13px; }
 .interior-shell .race-clock { background: #294764; padding: 12px 22px; border: 2px solid #182e45; border-radius: 5px; min-width: 180px; box-shadow: inset 0 3px #ffffff12; }
 .interior-shell .race-clock > span { color: #dbe9e8; }
-.interior-shell .race-clock strong { color: #ffdc61; font-size: 56px; }
+.interior-shell .race-clock strong { color: #ffdc61; font-size: 44px; }
 .interior-shell .race-clock .live-dot { background: #b4e199; }
 .interior-shell .race-progress { height: 7px; border: 1px solid #547484; background: #e4eeee; }
 .interior-shell .race-progress i { background: #d9775d; }
@@ -194,7 +195,7 @@
 .interior-shell .race-ready-overlay { background: #fff9e8f2; border: 2px solid var(--ink); box-shadow: 4px 4px 0 #263c594a; border-radius: 6px; color: var(--ink); text-shadow: none; }
 .interior-shell .race-ready-overlay .eyebrow { color: #677383; }
 .interior-shell .countdown-overlay strong { color: #ffdf69; text-shadow: 3px 3px 0 #263c59, -2px -2px 0 #263c59; }
-.interior-shell .pause-overlay { background: #294764f0; color: #fff9e8; border: 2px solid #172d44; border-radius: 6px; }
+.interior-shell .pause-overlay { background: rgba(41, 71, 100, .68); color: #fff9e8; border: 2px solid #172d44aa; border-radius: 6px; }
 .interior-shell .race-control-bar { padding-top: 18px; padding-bottom: 18px; }
 .interior-shell .speed-button { min-height: 36px; min-width: 36px; color: var(--ink); background: #f5f5e9; border: 1px solid #6c8c94; }
 .interior-shell .speed-button.active { border-color: var(--ink); background: #ffdc61; box-shadow: 0 2px 0 var(--ink); font-weight: 700; }
@@ -203,6 +204,9 @@
 .interior-shell .lane-label { flex-shrink: 0; color: #586f81; font-size: 10px; letter-spacing: 0; margin: 0; white-space: nowrap; }
 .interior-shell .lane-label b { color: var(--ink); margin-left: 2px; }
 .interior-shell .live-rank { background: #ffdc61; color: var(--ink); border: 1px solid #a88c43; }
+.interior-shell .live-rank.rank-first { background: #dc4f4f; color: #fff8e8; border-color: #a72f36; }
+.interior-shell .live-rank.rank-second { background: #ee8a35; color: #fff8e8; border-color: #b95a1e; }
+.interior-shell .live-rank.rank-third { background: #4d9b59; color: #f7fff0; border-color: #2e713b; }
 .interior-shell .lane-card-name { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 .interior-shell .gender-icon { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid currentColor; }
 .interior-shell .gender-male { color: #39759a; background: #d9edf6; }
@@ -340,11 +344,12 @@
   .interior-shell .event-buttons { grid-template-columns: 1fr; }
   .interior-shell .event-card { padding: 18px 14px; }
   .interior-shell .event-card > svg:first-child { display: block; }
-  .interior-shell .race-header { padding: 16px; gap: 14px; align-items: center; }
+  .interior-shell .race-header { padding: 10px 16px; gap: 14px; align-items: center; }
   .interior-shell .race-header > div:first-child { min-width: 0; }
   .interior-shell .race-header .eyebrow { font-size: 8px; letter-spacing: .025em; flex-wrap: wrap; gap: 4px; }
+  .interior-shell .race-header p { font-size: 10px; }
   .interior-shell .race-clock { min-width: 110px; padding: 10px; }
-  .interior-shell .race-clock strong { font-size: 38px; }
+  .interior-shell .race-clock strong { font-size: 32px; }
   .interior-shell .race-clock strong small { font-size: 17px; }
   .interior-shell .race-stadium .stadium-topline { font-size: 10px; }
   .interior-shell .race-ready-overlay { top: calc(50% + 18px); padding: 7px 12px; gap: 4px; }
@@ -354,7 +359,7 @@
   .interior-shell .lane-card { padding: 12px; }
   .interior-shell .lane-card .pixel-runner { width: 48px; height: 48px; }
   .interior-shell .lane-label { font-size: 11px; }
-  .interior-shell .live-rank { font-size: 9px; }
+  .interior-shell .live-rank { font-size: 11px; }
   .interior-shell .lane-times b { font-size: 15px; }
   .interior-shell .lane-times small { font-size: 10px; }
   .interior-shell .lane-times .lane-current-time b { font-size: 19px; }

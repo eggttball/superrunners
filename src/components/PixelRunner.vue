@@ -11,6 +11,7 @@ const props = defineProps({
   facing: { type: String, default: 'right' },
   backdrop: { type: Boolean, default: true },
   running: { type: Boolean, default: false },
+  paused: { type: Boolean, default: false },
   size: { type: [Number, String], default: 40 },
   overhead: { type: Boolean, default: false },
   label: { type: String, default: '' },
@@ -51,7 +52,7 @@ const runnerStyle = computed(() => ({
 <template>
   <svg
     class="pixel-runner"
-    :class="[{ 'is-running': running }, 'run-d']"
+    :class="[{ 'is-running': running, 'is-paused': paused }, 'run-d']"
     :width="size"
     :height="overhead ? Number(size) / 2 : size"
     :viewBox="overhead ? '0 0 16 8' : '0 0 24 24'"
@@ -174,6 +175,7 @@ const runnerStyle = computed(() => ({
 .pose-b { opacity: 0; }
 .run-d.is-running .pose-a { animation: pixel-step-d-a var(--stride-duration) steps(1, end) infinite; }
 .run-d.is-running .pose-b { animation: pixel-step-d-b var(--stride-duration) steps(1, end) infinite; }
+.run-d.is-running.is-paused .pose-a, .run-d.is-running.is-paused .pose-b { animation-play-state: paused; }
 @keyframes pixel-step-d-a { 0%, 49% { opacity: 1; transform: translate(0, 0); } 50%, 100% { opacity: 0; transform: translate(.2px, -.2px); } }
 @keyframes pixel-step-d-b { 0%, 49% { opacity: 0; transform: translate(-.2px, -.2px); } 50%, 100% { opacity: 1; transform: translate(0, 0); } }
 @media (prefers-reduced-motion: reduce) { .is-running .pose-a, .is-running .pose-b { animation: none; } }

@@ -92,6 +92,10 @@ small { font-size: 11px; }
 .stadium-topline { display: flex; justify-content: space-between; align-items: center; min-height: 42px; padding: 10px 20px; background: #23372b; color: #e5e6d5; font-size: 10px; letter-spacing: .06em; }
 .stadium-topline > span { display: flex; align-items: center; gap: 9px; }
 .stadium-topline b { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .12em; color: #93a289; margin-left: 8px; }
+.race-topline-controls { display: flex; align-items: center; gap: 5px; }
+.race-topline-controls .speed-button { padding: 4px 7px; font-size: 12px; }
+.race-topline-controls .btn { margin-left: 5px; }
+.race-topline-controls .next-heat-button { margin-left: 0; }
 .stadium-stage { position: relative; overflow: hidden; height: clamp(350px, 42vw, 610px); background: #dce5d1; }
 .stadium-stage .track-viewport, .stadium-stage .track-svg { height: 100%; width: 100%; }
 .stadium-inscription { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; color: #e8eed3; }
@@ -272,7 +276,7 @@ select { color-scheme: dark; }
 .race-controls .btn { margin-left: 7px; }
 .lane-cards { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 9px; }
 .lane-card { position: relative; display: flex; flex-direction: column; align-items: center; border-radius: 7px; background: #1f3025; border: 1px solid var(--line); border-top: 2px solid var(--runner-color); padding: 12px 5px; }
-.live-rank { display: inline-block; padding: 3px 5px; border-radius: 3px; background: #d9ee9e; color: #273824; font: 800 9px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.live-rank { display: inline-block; padding: 4px 7px; border-radius: 3px; background: #d9ee9e; color: #273824; font: 800 12px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
 .lane-label { position: absolute; top: 8px; left: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: 0; color: #94a786; z-index: 2; }
 .lane-label b { color: var(--runner-color); font-size: 12px; margin-left: 2px; }
 .runner-card-portrait { position: relative; display: inline-flex; justify-content: center; min-height: 47px; }
@@ -479,7 +483,9 @@ select { color-scheme: dark; }
   .race-clock strong { font-size: 44px; }
   .race-clock strong small { font-size: 18px; }
   .race-stadium .stadium-topline { gap: 7px; }
-  .race-stadium .stadium-topline .muted { font-size: 8px; }
+  .race-topline-controls { gap: 3px; }
+  .race-topline-controls .speed-button { min-width: 30px; padding: 4px 5px; font-size: 11px; }
+  .race-topline-controls .btn { margin-left: 2px; }
   .race-ready-overlay { padding: 0; gap: 5px; top: 48%; }
   .race-ready-overlay .eyebrow { font-size: 7px; white-space: nowrap; }
   .race-ready-overlay > strong { font-size: 21px; margin: 3px 0; }
