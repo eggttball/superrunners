@@ -384,7 +384,9 @@ export function rankStudents(world) {
   for (const school of world.schools) {
     for (const classroom of school.classes) gradeForClass.set(classroom.id, `${school.id}:${classroom.grade}`)
   }
-  const sorted = world.students.slice().sort((a, b) => rankingTime(a) - rankingTime(b))
+  // Keep the source list in national order. The UI can then page through the
+  // leaderboard without rebuilding and sorting the whole population on click.
+  const sorted = world.students.sort((a, b) => rankingTime(a) - rankingTime(b))
   const classes = new Map()
   const grades = new Map()
   const schools = new Map()

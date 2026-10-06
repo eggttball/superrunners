@@ -61,6 +61,8 @@
 .page-hero-copy p { color: #415b6b; font-size: 12px; }
 .page-hero-extra { margin-left: auto; flex-shrink: 0; }
 .page-hero-extra .badge { background: #fff9e8c9; border-color: #263c5940; }
+.school-hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.school-hero-actions .btn { white-space: nowrap; }
 .interior-shell .section-title h3, .interior-shell .split-heading h2 { color: var(--ink); font-weight: 800; }
 .interior-shell .section-title h3::before { content: ''; display: inline-block; width: 7px; height: 17px; border-radius: 1px; background: #df846b; flex-shrink: 0; }
 .interior-shell .section-title .muted { font-size: 11px; }
