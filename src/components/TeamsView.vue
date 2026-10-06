@@ -1,9 +1,24 @@
 <script setup vapor>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { game, go, getTeam, getStudent, getSchool, getClass, toggleFollow, timeText, dateText } from '../lib/game.js'
 import Icon from './Icon.vue'
 import PixelRunner from './PixelRunner.vue'
 import GamePageHeader from './GamePageHeader.vue'
+import { fetchPreferences, fetchTeam, syncState } from '../lib/cloud.js'
+import { useCloudRequest } from '../lib/useCloudRequest.js'
+
+const { loading: cloudLoading, error: cloudError, updatedAt: cloudUpdatedAt, load: loadCloud } = useCloudRequest()
+function refreshTeams() {
+  return loadCloud(async () => {
+    await fetchPreferences()
+    // Use the merged preferences, including this device's unsent edits.
+    for (const id of game.world.followedTeamIds) {
+      const team = getTeam(id)
+      if (team) await fetchTeam(team)
+    }
+  })
+}
+watch([() => game.navigationRevision, () => syncState.ready], refreshTeams, { immediate: true })
 
 const selectedId = ref('')
 const followed = computed(() => {
@@ -19,6 +34,7 @@ const typeLabel = type => ({ school: '學校田徑隊', city: '縣市代表隊',
 <template>
   <section class="content-view teams-view">
     <GamePageHeader title="我的隊伍" caption="TEAM CLUB" description="集合！一起追蹤你的明日之星。" theme="teams"><button class="btn primary" @click="go('schools')"><Icon name="school" :size="18" />探索學校<Icon name="arrow" :size="18" /></button></GamePageHeader>
+    <p class="cloud-read-status" role="status"><template v-if="cloudLoading">正在取得最新收藏隊伍與名單…</template><template v-else-if="cloudError">{{ cloudError }} <button class="text-button" @click="refreshTeams">重試</button></template><template v-else-if="cloudUpdatedAt">雲端更新於 {{ cloudUpdatedAt }}</template></p>
     <div v-if="!followed.length" class="panel team-empty">
       <div class="empty-team-sprites"><PixelRunner seed="empty-team-1" gender="女" color="#c7f36a" :size="85" /><PixelRunner seed="empty-team-2" gender="男" color="#eca675" :size="105" /><PixelRunner seed="empty-team-3" gender="女" color="#8caeda" :size="85" /></div>
       <span class="eyebrow">EVERY GREAT TEAM STARTS SOMEWHERE</span><h2>你的第一支隊伍，正在等你</h2><p>前往學校資料，點選「關注田徑隊」，<br />就能在這裡追蹤成員、最佳成績與得獎紀錄。</p><button class="btn primary" @click="go('schools')">發掘一支隊伍<Icon name="arrow" :size="18" /></button>

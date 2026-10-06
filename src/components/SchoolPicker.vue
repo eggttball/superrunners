@@ -2,6 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { game } from '../lib/game.js'
 import Icon from './Icon.vue'
+import { fetchPreferences, syncState } from '../lib/cloud.js'
+
+watch(() => syncState.ready, ready => { if (ready) void fetchPreferences().catch(() => {}) }, { immediate: true })
 
 const props = defineProps({ modelValue: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])

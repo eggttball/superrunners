@@ -21,12 +21,14 @@ function clearLegacyDatabases() {
 export function openDatabase() {
   if (connection) return connection
   connection = clearLegacyDatabases().then(() => new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 1)
+    const request = indexedDB.open(DATABASE, 2)
     let abandoned = false
     request.onupgradeneeded = () => {
       const db = request.result
-      db.createObjectStore('meta')
-      for (const table of TABLES) db.createObjectStore(table, { keyPath: 'id' })
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta')
+      for (const table of [...TABLES, 'outbox', 'cloudCache']) {
+        if (!db.objectStoreNames.contains(table)) db.createObjectStore(table, { keyPath: 'id' })
+      }
     }
     request.onsuccess = () => {
       if (abandoned) { request.result.close(); return }
@@ -90,9 +92,10 @@ export async function saveInitialWorld(world, onProgress = () => {}) {
   const claimed = completion(claim).catch(error => { throw claimError || error })
   const marker = claim.objectStore('meta').get('world')
   const raceCount = claim.objectStore('races').count()
+  const initializing = claim.objectStore('meta').get('initializing')
   const awardCount = claim.objectStore('awards').count()
   awardCount.onsuccess = () => {
-    if (marker.result || raceCount.result || awardCount.result) {
+    if (marker.result || (!initializing.result && (raceCount.result || awardCount.result))) {
       claimError = new Error('已有本機資料，已停止初始化以避免覆蓋。請重新載入。')
       claim.abort()
       return
@@ -137,20 +140,34 @@ export async function saveInitialWorld(world, onProgress = () => {}) {
 }
 
 // Related mutations share one transaction: a saved result cannot lose its best time or medals.
-export async function saveChanges(world, changes = {}) {
+export async function saveChanges(world, changes = {}, { enqueue, acknowledge, cache } = {}) {
   const db = await openDatabase()
   const tables = Object.keys(changes).filter(table => TABLES.includes(table))
-  const tx = db.transaction(['meta', ...tables], 'readwrite')
+  const tx = db.transaction(['meta', ...tables, ...(enqueue || acknowledge ? ['outbox'] : []), ...(cache ? ['cloudCache'] : [])], 'readwrite')
   const done = completion(tx)
   try {
     tx.objectStore('meta').put(metadata(world), 'world')
     for (const table of tables) for (const record of changes[table]) tx.objectStore(table).put(record)
+    if (enqueue) tx.objectStore('outbox').put(enqueue)
+    if (acknowledge) tx.objectStore('outbox').delete(acknowledge)
+    if (cache) tx.objectStore('cloudCache').put(cache)
   } catch (error) {
     tx.abort()
     await done.catch(() => {})
     throw error
   }
   await done
+}
+
+export async function pendingOperations() {
+  const db = await openDatabase()
+  const records = await value(db.transaction('outbox').objectStore('outbox').getAll())
+  return records.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+}
+
+export async function cachedCloudData(id) {
+  const db = await openDatabase()
+  return value(db.transaction('cloudCache').objectStore('cloudCache').get(id))
 }
 
 // The caller holds the mutation queue until serialization finishes, keeping every

@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-開啟終端機顯示的本機網址，預設為 `http://127.0.0.1:5173`。首次開啟時會在背景 Worker 產生完整全國學生資料，再寫入 IndexedDB；畫面會顯示生成、排名與保存進度。重新整理或再次開啟相同網址時讀取既有存檔，不會重新抽取學生。
+開啟終端機顯示的本機網址，預設為 `http://127.0.0.1:5173`。登入後先由 Worker 讀取 IndexedDB；沒有本機存檔才從 Realtime Database 還原。既有本機世界會在背景完成首次雲端上傳，以後不再重複下載固定資料。請先使用原本有存檔的瀏覽器與網址登入完成上傳，再使用新的瀏覽器。完整流程見 [雲端同步說明](docs/cloud-sync.md)。
 
 其他指令：
 
@@ -61,9 +61,9 @@ npm run update:schools
 
 ## 存檔與完整 JSON 匯出
 
-存檔保存在目前瀏覽器、目前網站來源的 IndexedDB，資料庫名為 `superrunners-taiwan-v3`。使用 `meta`、`schools`、`students`、`teams`、`races`、`awards` 六個 object store。啟動 v3 時會刪除舊的 `superrunners-taiwan-v1` 與 `superrunners-taiwan-v2` 資料庫；若舊版仍在其他分頁開啟，會在該分頁關閉後完成刪除。首次初始化完成後才寫入完成標記；成績與個人最佳共同保存，全班最後一組會將該班獎牌及校隊獎項關聯納入同一筆交易。重新開啟會從已保存的個人最佳重新計算排名；匯出期間會依序處理資料變更，以保持同一份完整快照。
+存檔保存在目前瀏覽器、目前網站來源的 IndexedDB，資料庫名為 `superrunners-taiwan-v3`。object store 版本為 2，保留原有 `meta`、`schools`、`students`、`teams`、`races`、`awards`，新增 `outbox` 與 `cloudCache`。本機變更與待同步動作在同一筆交易保存；收藏、關注、隊籍、綽號及每組成績會補傳到 Realtime Database。全班最後一組同時記錄獎牌及隊伍獎項。固定資料只在首次還原時下載；班級／年級／全校排名依操作取得，全國排名在雲端限制前 300 人，維持每頁 100 人。重新開啟與恢復連線會補傳未完成動作。
 
-畫面上的匯出按鈕會下載 `superrunners-tw-YYYY-MM-DD.json`，包含整個世界的資料。檔案內的秒數保存未四捨五入的數值，日期時間為 ISO 字串。此階段提供完整匯出，尚未提供 JSON 匯入介面。瀏覽器與網址／連接埠不同時使用不同存檔；清除網站資料也會清除本機世界，因此需要保留匯出的備份。
+畫面上的匯出按鈕會下載 `superrunners-tw-YYYY-MM-DD.json`，包含目前本機世界快照，日期時間為 ISO 字串。按需同步不會在匯出時重新下載所有學校歷史，因此尚未讀取的其他裝置變更可能不在此檔案中；同步控制用的 `outbox` 與 `cloudCache` 不列入匯出。目前沒有 JSON 匯入介面。瀏覽器與網址／連接埠不同時使用不同的本機快取，但同一管理者連結同一份雲端世界。
 
 JSON 的 `schemaVersion` 為 `3`，最上層結構如下：
 
@@ -107,10 +107,12 @@ JSON 的 `schemaVersion` 為 `3`，最上層結構如下：
 | `src/lib/generator.js` | 一次性產生全國學生及計算排名 |
 | `src/lib/world.worker.js` | 背景初始化與讀取存檔 |
 | `src/lib/storage.js` | IndexedDB 分表保存及完整 JSON 匯出 |
+| `src/lib/cloud.js`, `src/lib/cloud-schema.js` | Realtime Database 分批初始化、按需查詢、增量同步與資料轉換 |
+| `src/lib/firebase.js`, `database.rules.json` | Firebase 共用設定與資料庫存取規則／排名索引 |
 | `src/lib/game.js` | 遊戲狀態、學生編輯、成績與獎牌保存 |
 | `src/lib/physics.js`, `src/lib/track-geometry.js` | 百米速度模型與公尺比例幾何 |
 | `scripts/fetch-schools.mjs`, `scripts/school-sources/` | 官方名錄重建腳本與來源快照 |
 
 ## 驗證狀態
 
-依使用者明確要求，本次跳過所有測試，未新增或執行自動化測試，也未進行瀏覽器操作測試。已執行 `npm run build` 並成功產生正式版 `dist/`；建置通過不代表互動流程已經測試。功能與資料流程說明來自程式碼和來源資料檢查。
+依使用者要求不新增／執行測試；以 production build、差異檢查、程式碼審查及 Firebase 正式規則編譯部署確認交付。建置通過不代表瀏覽器互動或跨裝置行為已經測試。

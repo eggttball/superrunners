@@ -1,0 +1,140 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        "manifest": {
+          ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com'",
+          ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && newData.hasChildren(['worldId', 'schemaVersion', 'state', 'schoolCount', 'studentCount']) && newData.child('schemaVersion').val() === 1 && (!data.exists() || (data.child('worldId').val() === newData.child('worldId').val() && (data.child('state').val() === 'uploading' || newData.child('state').val() === 'ready'))) && (newData.child('state').val() === 'uploading' || newData.child('state').val() === 'ready')"
+        },
+        "worlds": {
+          "$worldId": {
+            "static": {
+              ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com'",
+              "meta": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId && root.child('users').child($uid).child('manifest/state').val() === 'uploading' && !data.exists()"
+              },
+              "schools": {
+                "$schoolId": {
+                  ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId && root.child('users').child($uid).child('manifest/state').val() === 'uploading' && !data.exists()"
+                }
+              }
+            },
+            "uploaded": {
+              ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com'",
+              "$schoolId": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId && root.child('users').child($uid).child('manifest/state').val() === 'uploading' && newData.val() === true"
+              }
+            },
+            "dynamic": {
+              ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com'",
+              "preferences": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId"
+              },
+              "rosters": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$teamId": {
+                  "$studentId": {
+                    ".validate": "newData.isBoolean()"
+                  }
+                }
+              },
+              "profiles": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$studentId": {
+                  "nickname": {
+                    ".validate": "newData.isString() && newData.val().length <= 20"
+                  },
+                  "isCityTeam": {
+                    ".validate": "newData.isBoolean()"
+                  },
+                  "isNationalTeam": {
+                    ".validate": "newData.isBoolean()"
+                  },
+                  "$other": {
+                    ".validate": false
+                  }
+                }
+              },
+              "bests": {
+                "$studentId": {
+                  ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId && newData.isNumber() && newData.val() >= 10 && (!data.exists() || newData.val() <= data.val())"
+                }
+              },
+              "races": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$schoolId": {
+                  "$raceId": {
+                    ".validate": "newData.hasChildren(['id', 'sessionId', 'schoolId', 'classId', 'results', 'finishedAt']) && newData.child('id').val() === $raceId && newData.child('schoolId').val() === $schoolId && newData.child('results').hasChild('0') && (!data.exists() || newData.child('finishedAt').val() === data.child('finishedAt').val())",
+                    "results": {
+                      "$index": {
+                        ".validate": "$index.matches(/^[0-7]$/) && newData.hasChildren(['studentId', 'time', 'lane', 'place']) && newData.child('time').isNumber() && newData.child('time').val() >= 10"
+                      }
+                    }
+                  }
+                }
+              },
+              "awards": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId"
+              },
+              "teamAwards": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId"
+              }
+            },
+            "rankings": {
+              "class": {
+                "$classId": {
+                  ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com'",
+                  ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                  ".indexOn": [
+                    "time"
+                  ],
+                  "$studentId": {
+                    ".validate": "newData.hasChildren(['time']) && newData.child('time').isNumber() && newData.child('time').val() >= 10 && (!newData.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() === newData.child('time').val())) && (!data.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() <= data.child('best100').val()))"
+                  }
+                }
+              },
+              "grade": {
+                "$schoolId": {
+                  "$grade": {
+                    ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com'",
+                    ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                    ".indexOn": [
+                      "time"
+                    ],
+                    "$studentId": {
+                      ".validate": "newData.hasChildren(['time']) && newData.child('time').isNumber() && newData.child('time').val() >= 10 && (!newData.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() === newData.child('time').val())) && (!data.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() <= data.child('best100').val()))"
+                    }
+                  }
+                }
+              },
+              "school": {
+                "$schoolId": {
+                  ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com'",
+                  ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                  ".indexOn": [
+                    "time"
+                  ],
+                  "$studentId": {
+                    ".validate": "newData.hasChildren(['time']) && newData.child('time').isNumber() && newData.child('time').val() >= 10 && (!newData.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() === newData.child('time').val())) && (!data.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() <= data.child('best100').val()))"
+                  }
+                }
+              },
+              "national": {
+                ".read": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && query.orderByChild === 'time' && query.limitToFirst != null && query.limitToFirst > 0 && query.limitToFirst <= 300",
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                ".indexOn": [
+                  "time"
+                ],
+                "$studentId": {
+                  ".validate": "newData.hasChildren(['time']) && newData.child('time').isNumber() && newData.child('time').val() >= 10 && (!newData.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() === newData.child('time').val())) && (!data.child('best100').exists() || (newData.child('best100').isNumber() && newData.child('best100').val() <= data.child('best100').val()))"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

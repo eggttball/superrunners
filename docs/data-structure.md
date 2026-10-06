@@ -1,16 +1,17 @@
 # Super Runners 資料結構
 
-本文件說明目前前端建立、暫存與匯出的遊戲世界資料。資料目前沒有後端資料庫；所有遊戲資料儲存在使用者瀏覽器的 IndexedDB，並可由「匯出存檔」下載成完整 JSON。
+本文件說明目前前端讀取、暫存與匯出的遊戲世界資料。本機使用 IndexedDB，雲端使用 Firebase Realtime Database；固定資料優先從本機載入，動態資料依操作同步。完整雲端路徑、遷移、按需查詢與斷線補傳見 [雲端同步說明](cloud-sync.md)。
 
 ## 儲存位置與版本
 
 - IndexedDB 資料庫名稱：`superrunners-taiwan-v3`
 - 資料結構版本：`schemaVersion: 3`
-- 每個瀏覽器各自保有一份獨立存檔。
-- 首次載入時產生全國學校、班級、學生與校隊；後續重新進入網頁會讀取同一份本機資料，不會重新隨機生成。
+- IndexedDB object store 版本：`2`，升級保留原有資料。
+- 每個瀏覽器各自保有本機快取，同一帳號連結同一個雲端世界。
+- 既有存檔首次連接時上傳至雲端。新的瀏覽器從雲端還原，不再重新隨機生成世界；有本機固定資料時不再重複下載。
 - 舊版資料庫 `superrunners-taiwan-v1`、`superrunners-taiwan-v2` 會在啟動時清除。
 
-資料庫使用一個 `meta` store 與五個以 `id` 為 key 的資料表：
+資料庫使用一個 `meta` store、五個實體資料表與兩個同步資料表（其餘皆以 `id` 為 key）：
 
 | Store | 用途 |
 | --- | --- |
@@ -20,12 +21,14 @@
 | `teams` | 學校田徑隊及未來可擴充的代表隊 |
 | `races` | 每一組百米賽的完成紀錄 |
 | `awards` | 班級完整賽程完成後產生的前三名獎牌 |
+| `outbox` | 與本機變更一起保存的待同步動作；雲端確認後移除 |
+| `cloudCache` | 排名等按需查詢的快照及更新時間 |
 
 每次寫入會同時更新 `meta` 與受影響資料表，避免成績、個人最佳與獎牌只寫入其中一部分。
 
 ## 完整匯出 JSON
 
-匯出檔案將上述 stores 合併成一個 JSON 物件。結構如下：
+匯出檔案將 `meta` 與原有五個實體 stores 合併成一個 JSON 物件；`outbox`、`cloudCache` 不匯出。這是本機目前快照，不代表所有尚未瀏覽學校的動態資料都已重新讀取。結構如下：
 
 ```js
 {
@@ -54,6 +57,8 @@
 
 `exportedAt` 僅在匯出檔加入，不會寫回遊戲存檔。
 
+完成雲端連接後，還會保存 `cloudBinding: { uid, worldId, databaseURL }`，避免錯誤帳號或不同世界互相覆寫。
+
 ## 關聯總覽
 
 ```mermaid
@@ -64,7 +69,7 @@ erDiagram
   TEAMS }o--o{ STUDENTS : memberIds
   SCHOOLS ||--o{ RACES : hosts
   CLASSES ||--o{ RACES : runs
-  RACES ||--o{ AWARDS : completes
+  CLASSES ||--o{ AWARDS : awards_per_session
   STUDENTS ||--o{ AWARDS : receives
 ```
 
@@ -287,6 +292,6 @@ erDiagram
 
 這個控制器**不寫入 IndexedDB**，因此重新整理網頁、關閉分頁或關閉瀏覽器時，尚未完成的自動賽程不會續跑。已完成並寫入 `races` 的組別、已更新的個人最佳成績與已產生的獎牌則會保留。
 
-## 匯出與未來後端的對應
+## 本機與雲端的對應
 
-匯出 JSON 已包含建置後端所需的主要實體、關聯 ID、成績快照與獎牌資料。若未來移至後端，建議維持目前的 `schools`、`students`、`teams`、`races`、`awards` 五個主要實體，並以目前的 ID 欄位做關聯；`meta` 中的收藏、追蹤與設定則可改為使用者專屬設定資料。
+本機維持目前的 `schools`、`students`、`teams`、`races`、`awards` 物件，雲端拆為固定 `static`、動態 `dynamic` 與四種 `rankings` 索引，仍使用相同 ID 關聯。收藏、關注以 UID 隔離；音樂靜音設定仍屬於各瀏覽器的本機設定。完整對應見 [雲端同步說明](cloud-sync.md)。

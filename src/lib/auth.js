@@ -1,21 +1,11 @@
 import { shallowReactive } from 'vue'
 import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth'
-import { initializeApp } from 'firebase/app'
-
-const firebaseConfig = {
-  apiKey: 'AIzaSyCJ5p1htMhprUyISvv9tE_gQNduXTlDdw4',
-  authDomain: 'superrunners.firebaseapp.com',
-  projectId: 'superrunners',
-  storageBucket: 'superrunners.firebasestorage.app',
-  messagingSenderId: '928153234245',
-  appId: '1:928153234245:web:bd27a848ea352256feac2c',
-}
+import { firebaseApp } from './firebase.js'
 
 // This is a private single-user application. Create this account in Firebase Console.
 export const ADMIN_EMAIL = 'eggttball@gmail.com'
 
-const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+export const auth = getAuth(firebaseApp)
 export const authState = shallowReactive({ user: null, loading: true, error: '' })
 
 setPersistence(auth, browserLocalPersistence).catch(error => {

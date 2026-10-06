@@ -5,6 +5,12 @@ import SchoolPicker from './SchoolPicker.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
 import GamePageHeader from './GamePageHeader.vue'
+import { fetchRanking, fetchTeam, syncState } from '../lib/cloud.js'
+import { cachedCloudData } from '../lib/storage.js'
+import { useCloudRequest } from '../lib/useCloudRequest.js'
+
+const { loading: cloudLoading, error: cloudError, updatedAt: cloudUpdatedAt, load: loadCloud } = useCloudRequest()
+const cloudRanking = ref(null)
 
 const grade = ref(1)
 const classId = ref('')
@@ -26,6 +32,10 @@ const selectedClass = computed(() => getClass(classId.value))
 const studentCount = computed(() => school.value?.classes.reduce((sum, cls) => sum + cls.studentIds.length, 0) || 0)
 const rankedStudents = computed(() => {
   game.revision
+  if (cloudRanking.value) return cloudRanking.value.entries.map(entry => {
+    const student = getStudent(entry.id)
+    return student ? { ...student, best100: entry.best100, ranks: { ...student.ranks, [cloudRanking.value.scope]: entry.rank } } : null
+  }).filter(Boolean)
   if (!school.value) return []
   if (teamOnly.value) {
     const memberIds = new Set(team.value?.memberIds || [])
@@ -38,12 +48,13 @@ const rankedStudents = computed(() => {
     .map(student => ({ ...student, ranks: { ...student.ranks } }))
     .sort((a, b) => a.ranks[scope.value] - b.ranks[scope.value] || studentTime(a) - studentTime(b) || a.id.localeCompare(b.id))
 })
-const rosterCount = computed(() => nationalRanking.value ? Math.min(game.world.students.length, nationalRankingLimit) : rankedStudents.value.length)
+const nationalStudents = computed(() => { game.revision; return cloudRanking.value ? rankedStudents.value : game.world.students.slice(0, nationalRankingLimit) })
+const rosterCount = computed(() => nationalRanking.value ? nationalStudents.value.length : rankedStudents.value.length)
 const activePageSize = computed(() => nationalRanking.value ? nationalPageSize : pageSize)
 const pageCount = computed(() => Math.max(1, Math.ceil(rosterCount.value / activePageSize.value)))
 const visibleStudents = computed(() => {
   const start = (page.value - 1) * activePageSize.value
-  if (nationalRanking.value) return game.world.students.slice(start, start + activePageSize.value)
+  if (nationalRanking.value) return nationalStudents.value.slice(start, start + activePageSize.value)
   return rankedStudents.value.slice(start, start + activePageSize.value)
 })
 const awards = computed(() => { game.revision; return game.world.awards.filter(award => award.schoolId === game.schoolId).slice().sort((a, b) => b.dateTime.localeCompare(a.dateTime) || a.place - b.place) })
@@ -54,10 +65,33 @@ function toggleTeamRoster() {
   page.value = 1
 }
 
-watch(() => game.schoolId, () => { grade.value = 1; classId.value = getSchool(game.schoolId)?.classes.find(cls => cls.grade === 1)?.id || ''; teamOnly.value = false; page.value = 1 }, { immediate: true })
+async function refreshRoster() {
+  cloudRanking.value = null
+  const selectedScope = nationalRanking.value ? 'national' : scope.value
+  const args = { schoolId: game.schoolId, classId: classId.value, grade: grade.value }
+  const selectedTeam = team.value
+  if (teamOnly.value && !nationalRanking.value && selectedTeam) {
+    await loadCloud(() => fetchTeam(selectedTeam))
+    return
+  }
+  if (selectedScope !== 'national' && (!school.value || !classId.value)) return
+  const path = selectedScope === 'national' ? 'national' : selectedScope === 'class' ? `class/${args.classId}` : selectedScope === 'grade' ? `grade/${args.schoolId}/${args.grade}` : `school/${args.schoolId}`
+  await loadCloud(async () => {
+    try { return await fetchRanking(selectedScope, args) }
+    catch (error) {
+      // Restore the exact previous cloud snapshot on an offline visit.
+      const cached = await cachedCloudData(`ranking:${path}`)
+      error.cachedRanking = cached?.data.ranking
+      throw error
+    }
+  }, result => { cloudRanking.value = result.ranking })
+}
+
+watch(() => game.schoolId, () => { grade.value = 1; scope.value = 'class'; classId.value = getSchool(game.schoolId)?.classes.find(cls => cls.grade === 1)?.id || ''; teamOnly.value = false; page.value = 1 }, { immediate: true })
 watch(grade, () => { classId.value = classes.value[0]?.id || '' })
 watch([grade, classId, scope], () => { page.value = 1 })
 watch(pageCount, count => { if (page.value > count) page.value = count })
+watch([() => game.schoolId, grade, classId, scope, teamOnly, nationalRanking, () => game.navigationRevision, () => syncState.ready], refreshRoster, { immediate: true })
 </script>
 
 <template>
@@ -65,7 +99,7 @@ watch(pageCount, count => { if (page.value > count) page.value = count })
     <GamePageHeader title="學校資料" caption="CAMPUS MAP" description="逛逛校園，發掘下一位跑道新星。" theme="schools"><span class="badge"><Icon name="globe" :size="15" />臺灣 · {{ game.world.schools.length }} 所學校</span></GamePageHeader>
     <div class="school-layout">
       <SchoolPicker v-model="game.schoolId" />
-      <div v-if="school" class="panel detail-panel school-detail">
+      <div v-if="school || nationalRanking" class="panel detail-panel school-detail">
         <template v-if="!nationalRanking"><div class="school-heading"><div class="school-emblem"><Icon name="school" :size="32" /></div><div class="school-heading-copy"><span class="eyebrow">{{ school.city }} <span class="school-code">/ {{ school.officialCode }}</span></span><h2>{{ school.name }}</h2><p v-if="school.address" class="school-address"><Icon name="pin" :size="13" />{{ school.address }}</p></div></div>
         <div class="school-actions"><button class="btn small" :class="{ primary: isFavorite }" :aria-pressed="isFavorite" :disabled="game.saving" @click="toggleFavorite(school.id)"><Icon name="star" :size="16" />{{ isFavorite ? '已收藏學校' : '收藏學校' }}</button><button v-if="team" class="btn small" :class="{ primary: isFollowed }" :aria-pressed="isFollowed" :disabled="game.saving" @click="toggleFollow(team.id)"><Icon name="heart" :size="16" />{{ isFollowed ? '已關注田徑隊' : '關注田徑隊' }}</button><button class="btn small" :class="{ primary: teamOnly }" :aria-pressed="teamOnly" :disabled="!team" @click="toggleTeamRoster"><Icon name="team" :size="16" />{{ teamOnly ? '返回學生名冊' : '查看田徑隊名單' }}</button><button class="btn small ghost school-race-link" @click="go('race', school.id)">舉辦校內比賽<Icon name="arrow" :size="16" /></button></div>
         <div class="stat-grid school-stat-grid"><div class="stat-card"><strong>3</strong><span>年級</span></div><div class="stat-card"><strong>{{ school.classes.length }}</strong><span>班級</span></div><div class="stat-card"><strong>{{ studentCount.toLocaleString() }}</strong><span>學生</span></div><div class="stat-card"><strong>{{ team?.memberIds.length || 0 }}</strong><span>田徑隊員</span></div></div></template>
@@ -74,13 +108,15 @@ watch(pageCount, count => { if (page.value > count) page.value = count })
         <div v-if="!teamOnly && !nationalRanking" class="class-picker" aria-label="選擇班級"><button v-for="cls in classes" :key="cls.id" class="chip" :class="{ active: classId === cls.id }" :aria-pressed="classId === cls.id" @click="classId = cls.id; scope = 'class'"><i class="class-color" :style="{ background: cls.color }"></i>{{ cls.name }}<small>{{ cls.studentIds.length }} 人</small></button></div>
         <div class="roster-toolbar"><div><strong>{{ tableLabel }}</strong><span class="muted">{{ rosterCount }} 位</span></div><label v-if="!teamOnly && !nationalRanking">能力排名範圍<select v-model="scope"><option value="class">班級排名</option><option value="grade">年級排名</option><option value="school">全校排名</option></select></label></div>
         <p class="ranking-note">{{ nationalRanking ? '顯示全國百米成績前 300 名。' : teamOnly ? '依田徑隊內百米成績排序。' : '依百米個人最佳排序；尚未參賽的學生以預估 100m 成績排名。' }} 點選姓名查看完整能力。</p>
+        <p class="cloud-read-status" role="status"><template v-if="cloudLoading">正在取得雲端最新資料…</template><template v-else-if="cloudError">{{ cloudError }} <button class="text-button" @click="refreshRoster">重試</button></template><template v-else-if="cloudUpdatedAt">雲端更新於 {{ cloudUpdatedAt }}</template></p>
         <div class="pagination roster-pagination"><span class="muted">{{ rosterCount ? (page - 1) * activePageSize + 1 : 0 }}–{{ Math.min(page * activePageSize, rosterCount) }} / {{ rosterCount }} 位學生</span><div><button class="btn small ghost" :disabled="page <= 1" aria-label="上一頁學生" @click="page--"><Icon name="back" :size="15" /></button><span aria-live="polite">{{ page }} <span class="muted">/ {{ pageCount }}</span></span><button class="btn small ghost" :disabled="page >= pageCount" aria-label="下一頁學生" @click="page++"><Icon name="arrow" :size="15" /></button></div></div>
         <div class="table-wrap"><table class="data-table student-table"><thead><tr><th>{{ nationalRanking ? '全國' : teamOnly ? '隊內' : scopeLabels[scope] }}排名</th><th>學生 / 學號</th><th>{{ nationalRanking ? '學校 / 班級' : '班級' }}</th><th>性別 / 年齡</th><th>百米成績</th><th>隊員身分</th></tr></thead><tbody><tr v-for="(student, index) in visibleStudents" :key="student.id"><td><span class="rank-number" :class="{ 'rank-leading': (nationalRanking ? student.ranks.national : teamOnly ? (page - 1) * pageSize + index + 1 : student.ranks[scope]) <= 3 }">{{ String(nationalRanking ? student.ranks.national : teamOnly ? (page - 1) * pageSize + index + 1 : student.ranks[scope]).padStart(2, '0') }}</span></td><td><button class="student-link school-student-link" @click="game.studentId = student.id"><PixelRunner :seed="student.id" :gender="student.gender" :height="student.height" :weight="student.weight" :color="getClass(student.classId).color" :size="36" /><span><strong>{{ student.name }}<em v-if="student.nickname">{{ student.nickname }}</em></strong><small class="mono">{{ student.studentNumber }}</small></span></button></td><td><i class="class-color" :style="{ background: getClass(student.classId).color }"></i><template v-if="nationalRanking">{{ getSchool(student.schoolId).name }} / </template>{{ getClass(student.classId).name }}</td><td>{{ student.gender }}<small>{{ student.age }} 歲</small></td><td><span class="result-time mono">{{ timeText(studentTime(student)) }}<small>s</small></span><small class="time-kind" :class="{ estimated: student.best100 === null }">{{ student.best100 === null ? '預估 100m' : '個人最佳' }}</small></td><td><span v-if="student.isNationalTeam" class="badge green">國家代表</span><span v-else-if="student.isCityTeam" class="badge green">縣市代表</span><span v-else-if="student.isSchoolTeam" class="badge green">校隊</span><span v-else class="muted">一般學生</span></td></tr></tbody></table></div>
         <div v-if="!rosterCount" class="empty-state">這個範圍目前沒有學生。</div>
         <div class="pagination"><span class="muted">{{ rosterCount ? (page - 1) * activePageSize + 1 : 0 }}–{{ Math.min(page * activePageSize, rosterCount) }} / {{ rosterCount }} 位學生</span><div><button class="btn small ghost" :disabled="page <= 1" aria-label="上一頁學生" @click="page--"><Icon name="back" :size="15" /></button><span aria-live="polite">{{ page }} <span class="muted">/ {{ pageCount }}</span></span><button class="btn small ghost" :disabled="page >= pageCount" aria-label="下一頁學生" @click="page++"><Icon name="arrow" :size="15" /></button></div></div>
-        <div class="section-title school-honors-title"><h3><Icon name="trophy" :size="19" />歷年榮譽</h3><span class="muted">{{ awards.length }} 面獎牌</span></div>
+        <template v-if="!nationalRanking"><div class="section-title school-honors-title"><h3><Icon name="trophy" :size="19" />歷年榮譽</h3><span class="muted">{{ awards.length }} 面獎牌</span></div>
         <div v-if="!awards.length" class="school-medals-empty"><Icon name="trophy" :size="28" /><div><strong>第一面獎牌，等你來寫下</strong><p>各班百米全數完賽後，前三名會在這裡留下年度、姓名與成績。</p></div></div>
         <div v-else class="school-awards"><div v-for="award in awards" :key="award.id" class="award-row"><span class="medal-icon" :class="'medal-' + award.place"><Icon name="trophy" :size="20" /></span><div><strong>{{ award.year }} · {{ award.competition }} · {{ award.medal }}</strong><button class="medal-student" @click="game.studentId = award.studentId">{{ award.studentName }}<Icon name="arrow" :size="12" /></button></div><b class="mono">{{ timeText(award.time) }} s</b></div></div>
+        </template>
       </div>
       <div v-else class="panel detail-panel school-welcome"><div class="welcome-track"><PixelRunner seed="school-explore-1" gender="女" color="#c7f36a" :size="94" /><PixelRunner seed="school-explore-2" gender="男" color="#a2bcdc" :size="75" /></div><span class="eyebrow">BIG DREAMS START AT SCHOOL</span><h2>下一位新星，從這裡出發</h2><p>選擇一所學校，認識班上的每一位跑者，<br />收藏主場、關注田徑隊，發掘他們的百米潛力。</p><span class="badge"><Icon name="pin" :size="14" />22 縣市 · 全國國中名錄</span></div>
     </div>

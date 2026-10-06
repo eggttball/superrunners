@@ -158,6 +158,11 @@
 .interior-shell .school-welcome p { color: #5a7180; }
 
 /* Race setup, stadium scoreboard and results. */
+.cloud-read-status { color: #59716a; font-size: 12px; line-height: 1.8; margin: 10px 0 14px; }
+.cloud-read-status:empty { display: none; }
+.cloud-read-status .text-button { text-decoration: underline; margin-left: 8px; }
+.cloud-sync-notice { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 15px auto; max-width: 1450px; padding: 12px 16px; color: #553d24; background: #fff1cb; border: 2px solid #ae8955; border-radius: 6px; font-size: 12px; }
+.cloud-sync-notice .btn { flex-shrink: 0; }
 .interior-shell .race-setup-detail > .split-heading { border-bottom: 1px dashed #b5ad83; padding-bottom: 18px; }
 .interior-shell .selection-counter { background: #fff0bd; color: #826d3a; padding: 5px 15px; border: 1px solid #c5ad6a; border-radius: 5px; font-size: 19px; }
 .interior-shell .selection-counter b { color: var(--ink); font-weight: 700; }

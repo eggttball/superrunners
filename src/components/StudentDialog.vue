@@ -1,8 +1,9 @@
 <script setup vapor>
-import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { game, getStudent, getSchool, getClass, editStudent, timeText, dateText } from '../lib/game.js'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
+import { fetchStudent } from '../lib/cloud.js'
 
 const dialog = ref(null)
 const student = computed(() => { game.revision; const value = getStudent(game.studentId); return value ? { ...value, ranks: { ...value.ranks } } : null })
@@ -10,6 +11,12 @@ const school = computed(() => student.value ? getSchool(student.value.schoolId) 
 const classroom = computed(() => student.value ? getClass(student.value.classId) : null)
 const nickname = ref(student.value?.nickname || '')
 const isSchoolTeam = ref(Boolean(student.value?.isSchoolTeam))
+const nicknameEdited = ref(false)
+const teamEdited = ref(false)
+watch(() => [student.value?.nickname, student.value?.isSchoolTeam], ([name, member]) => {
+  if (!nicknameEdited.value) nickname.value = name || ''
+  if (!teamEdited.value) isSchoolTeam.value = !!member
+})
 const saving = ref(false)
 const error = ref('')
 const historyLimit = ref(10)
@@ -41,7 +48,10 @@ async function save() {
   saving.value = true
   error.value = ''
   try {
-    await editStudent(student.value.id, nickname.value, isSchoolTeam.value)
+    await editStudent(student.value.id, {
+      ...(nicknameEdited.value ? { nickname: nickname.value } : {}),
+      ...(teamEdited.value ? { isSchoolTeam: isSchoolTeam.value } : {}),
+    })
     saving.value = false
     close()
   } catch (cause) {
@@ -73,6 +83,9 @@ onMounted(async () => {
   dialog.value.showModal()
   await nextTick()
   dialog.value.querySelector('[data-dialog-close]')?.focus()
+  try {
+    await fetchStudent(student.value, school.value.teamId)
+  } catch (cause) { error.value = cause.message }
 })
 onUnmounted(() => {
   document.body.style.overflow = previousOverflow
@@ -95,15 +108,15 @@ onUnmounted(() => {
         <div class="profile-ranks"><div v-for="rank in rankLabels" :key="rank.key"><span>{{ rank.label }}</span><strong><small>#</small>{{ student.ranks[rank.key].toLocaleString() }}</strong></div></div>
         <p class="profile-note">排名以個人最佳或尚未參賽者的預估 100m 成績比較，完賽後更新。</p>
         <div class="profile-section-heading"><h3>跑者設定</h3><span>可編輯項目</span></div>
-        <label class="nickname-field"><span>綽號<small>{{ nickname.length }}/20</small></span><input v-model="nickname" type="text" maxlength="20" placeholder="給這位跑者一個專屬稱呼" :disabled="saving" autocomplete="off" /></label>
-        <label class="school-team-toggle"><div><Icon name="team" :size="21" /><span><strong>學校田徑隊員</strong><small>加入或移出 {{ school.name }}田徑隊</small></span></div><input v-model="isSchoolTeam" type="checkbox" :disabled="saving" /><span class="switch-visual" aria-hidden="true"></span></label>
+        <label class="nickname-field"><span>綽號<small>{{ nickname.length }}/20</small></span><input v-model="nickname" @input="nicknameEdited = true" type="text" maxlength="20" placeholder="給這位跑者一個專屬稱呼" :disabled="saving" autocomplete="off" /></label>
+        <label class="school-team-toggle"><div><Icon name="team" :size="21" /><span><strong>學校田徑隊員</strong><small>加入或移出 {{ school.name }}田徑隊</small></span></div><input v-model="isSchoolTeam" @change="teamEdited = true" type="checkbox" :disabled="saving" /><span class="switch-visual" aria-hidden="true"></span></label>
         <div class="representative-status"><div><Icon name="flag" :size="16" /><span>縣市代表隊</span><span class="badge" :class="{ green: student.isCityTeam }">{{ student.isCityTeam ? '已入選' : '未入選' }}</span></div><div><Icon name="globe" :size="16" /><span>國家代表隊</span><span class="badge" :class="{ green: student.isNationalTeam }">{{ student.isNationalTeam ? '已入選' : '未入選' }}</span></div></div>
         <p class="profile-note">代表隊身分由系統選拔產生；自動選拔將於下一階段開放。</p>
         <div class="profile-section-heading history-heading"><h3><Icon name="clock" :size="17" />比賽紀錄</h3><span>{{ history.length }} 次出賽 · {{ medalCount }} 面獎牌</span></div>
         <div v-if="!history.length" class="profile-history-empty"><Icon name="flag" :size="25" /><strong>故事，從第一場比賽開始</strong><p>完賽時間與當時的姓名、班級會永久保留在這裡。</p></div>
         <div v-else class="profile-history"><div v-for="record in visibleHistory" :key="record.id" class="individual-record"><div class="record-place">#{{ record.place }}</div><div class="record-info"><strong>100 公尺 · {{ record.className }} · 第 {{ record.heat }} 組</strong><span>{{ record.name }}{{ record.nickname ? `（${record.nickname}）` : '' }} · {{ record.studentNumber }} · 第 {{ record.lane }} 道</span><small>{{ dateText(record.dateTime) }} · {{ record.schoolName }}</small></div><b class="mono">{{ timeText(record.time) }}<small>s</small></b></div><button v-if="history.length > historyLimit" type="button" class="btn small ghost more-history" @click="historyLimit += 10">顯示更多紀錄（還有 {{ history.length - historyLimit }} 筆）</button></div>
       </div>
-      <footer class="profile-footer"><p v-if="error" class="profile-error" role="alert">{{ error }}</p><div><span class="muted">{{ saving ? '正在保存資料…' : '變更會儲存在此瀏覽器' }}</span><button type="button" class="btn ghost" :disabled="saving" @click="close">取消</button><button type="submit" class="btn primary" :disabled="saving"><Icon name="check" :size="17" />{{ saving ? '保存中…' : '保存變更' }}</button></div></footer>
+      <footer class="profile-footer"><p v-if="error" class="profile-error" role="alert">{{ error }}</p><div><span class="muted">{{ saving ? '正在保存資料…' : '變更會保存至本機並同步雲端' }}</span><button type="button" class="btn ghost" :disabled="saving" @click="close">取消</button><button type="submit" class="btn primary" :disabled="saving"><Icon name="check" :size="17" />{{ saving ? '保存中…' : '保存變更' }}</button></div></footer>
     </form>
     <div v-else class="profile-missing"><h2 id="student-dialog-title">找不到學生資料</h2><p id="student-dialog-description">請關閉後重新選擇學生。</p><button type="button" class="btn" data-dialog-close @click="close">關閉</button></div>
   </dialog>

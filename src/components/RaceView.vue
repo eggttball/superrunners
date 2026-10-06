@@ -8,6 +8,7 @@ import Track from './Track.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
 import GamePageHeader from './GamePageHeader.vue'
+import { fetchHistory } from '../lib/cloud.js'
 
 const gradeLabels = ['一年級', '二年級', '三年級']
 const selectedSchoolId = ref(game.schoolId)
@@ -97,6 +98,9 @@ const records = computed(() => { game.revision; return game.world.races.filter(r
 const sessionRecords = computed(() => { game.revision; return game.world.races.filter(race => race.sessionId === displayedSessionId.value) })
 const sessionResults = computed(() => sessionRecords.value.flatMap(race => race.results).sort((a, b) => a.time - b.time))
 watch(selectedSchoolId, value => { selectedClasses.value = []; game.schoolId = value; grade.value = 1 })
+watch([showHistory, selectedSchoolId], async ([show, id]) => {
+  if (show && id) try { await fetchHistory(id) } catch (error) { notify(error.message) }
+})
 
 function selectClass(id) {
   if (selectedClasses.value.includes(id)) selectedClasses.value = selectedClasses.value.filter(value => value !== id)

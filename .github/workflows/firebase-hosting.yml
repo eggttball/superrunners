@@ -19,7 +19,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -27,6 +27,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Authenticate for database rules deployment
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SUPPERRUNNERS }}
+
+      - name: Deploy Realtime Database rules
+        run: npx --yes firebase-tools@15.30.2 deploy --only database --project superrunners --non-interactive
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0

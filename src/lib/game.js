@@ -1,5 +1,7 @@
 import { reactive, shallowReactive } from 'vue'
-import { saveChanges, exportWorld } from './storage.js'
+import { saveChanges, exportWorld, pendingOperations } from './storage.js'
+import { cloudOperation, installCloudSync, queueSync, restoreCloud, retryCloudSync } from './cloud.js'
+import { flagIds } from './cloud-schema.js'
 import { rankStudents } from './generator.js'
 import { createSprintProfile } from './physics.js'
 import { playCountdown, playStartWhistle, setMusic, setMusicMode } from './audio.js'
@@ -7,10 +9,11 @@ import { playCountdown, playStartWhistle, setMusic, setMusicMode } from './audio
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
   revision: 0, tab: 'home', schoolId: '', studentId: '', nationalRanking: false, toast: '', busy: false,
-  saving: false, muted: false, audioStarted: false, exportBusy: false,
+  saving: false, muted: false, audioStarted: false, exportBusy: false, navigationRevision: 0,
 })
 let students = new Map(), schools = new Map(), classes = new Map(), teams = new Map()
 let toastTimer, mutationQueue = Promise.resolve()
+let initializationStarted = false
 
 // This controller deliberately lives outside RaceView. It keeps a school-wide
 // meet running while the player reads schools, teams, or returns home.
@@ -28,6 +31,8 @@ export function notify(message) {
 }
 
 export async function initialize() {
+  if (initializationStarted) return
+  initializationStarted = true
   // One editable tab prevents stale copies of the national database from overwriting each other.
   if (navigator.locks) {
     navigator.locks.request('superrunners-session', { ifAvailable: true }, async lock => {
@@ -41,11 +46,24 @@ export async function initialize() {
 function boot() {
   return new Promise(resolve => {
     const worker = new Worker(new URL('./world.worker.js', import.meta.url), { type: 'module' })
-    worker.onmessage = event => {
+    worker.onmessage = async event => {
       const data = event.data
       if (data.type === 'progress') {
         game.phase = data.phase
         game.progress = Math.min(100, Math.round(data.progress <= 1 ? data.progress * 100 : data.progress))
+      }
+      if (data.type === 'missing') {
+        try {
+          const world = await restoreCloud(progress => {
+            game.phase = progress.phase
+            game.progress = Math.round(progress.progress * 100)
+          })
+          worker.postMessage({ type: 'restore', world })
+        } catch (error) {
+          game.error = error.message
+          worker.terminate()
+          resolve()
+        }
       }
       if (data.type === 'ready') {
         const world = data.world
@@ -58,6 +76,10 @@ function boot() {
         classes = new Map()
         for (const school of world.schools) for (const cls of school.classes) classes.set(cls.id, cls)
         game.world = world
+        installCloudSync(() => game.world, mergeCloudData)
+        // Existing local data is usable immediately, even with an offline
+        // backlog or a long first upload. The outbox preserves new edits.
+        void retryCloudSync()
         game.muted = world.settings?.muted ?? false
         if (game.audioStarted) setMusic(game.muted).catch(() => {})
         game.ready = true
@@ -90,6 +112,7 @@ export const studentTime = student => Number.isFinite(student.best100) && studen
 
 export function go(tab, schoolId = '') {
   game.tab = tab
+  game.navigationRevision++
   if (schoolId) game.schoolId = schoolId
   game.studentId = ''
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -110,13 +133,95 @@ function transaction(operation, saving = true) {
   return result
 }
 
-async function updateMeta(change) {
+// Cloud snapshots and user edits share the same local mutation queue. Pending
+// operations overlay reads so an offline edit is never erased by a refresh.
+async function mergeCloudData(update) {
+  return transaction(async () => {
+    const pending = (await pendingOperations()).filter(operation => operation.id !== update.acknowledge)
+    if (update.stillCurrent && !update.stillCurrent()) return false
+    const patches = Object.assign({}, ...pending.filter(operation => operation.type === 'patch').map(operation => operation.payload))
+    const changed = new Map()
+    const changedTeams = new Map()
+    const studentCopy = id => {
+      if (!changed.has(id) && getStudent(id)) changed.set(id, { ...getStudent(id), ranks: { ...getStudent(id).ranks } })
+      return changed.get(id)
+    }
+    for (const profile of [...(update.profiles || []), ...(update.bests || [])]) {
+      const student = studentCopy(profile.id)
+      if (!student) continue
+      const previousBest = student.best100
+      Object.assign(student, profile)
+      student.best100 = profile.best100 == null ? previousBest : previousBest == null ? profile.best100 : Math.min(previousBest, profile.best100)
+    }
+    if (update.ranking) for (const entry of update.ranking.entries) {
+      const student = studentCopy(entry.id)
+      if (!student) continue
+      if (entry.best100 != null) student.best100 = student.best100 == null ? entry.best100 : Math.min(student.best100, entry.best100)
+      student.ranks[update.ranking.scope] = entry.rank
+    }
+    if (update.roster) {
+      const { teamId, memberIds, awardIds } = update.roster
+      const team = getTeam(teamId)
+      if (team) {
+        const nextIds = new Set(memberIds)
+        for (const [path, value] of Object.entries(patches)) {
+          const prefix = `dynamic/rosters/${teamId}/`
+          if (path.startsWith(prefix)) { if (value) nextIds.add(path.slice(prefix.length)); else nextIds.delete(path.slice(prefix.length)) }
+        }
+        for (const id of new Set([...team.memberIds, ...nextIds])) {
+          const student = studentCopy(id)
+          if (student) student.isSchoolTeam = nextIds.has(id)
+        }
+        changedTeams.set(teamId, { ...team, memberIds: [...nextIds], awardIds: [...new Set([...team.awardIds, ...awardIds])] })
+      }
+    }
+    for (const student of changed.values()) {
+      for (const key of ['nickname', 'isCityTeam', 'isNationalTeam']) {
+        const path = `dynamic/profiles/${student.id}/${key}`
+        if (path in patches) student[key] = patches[path]
+      }
+      const team = getTeam(getSchool(student.schoolId).teamId)
+      const path = `dynamic/rosters/${team.id}/${student.id}`
+      if (path in patches) student.isSchoolTeam = !!patches[path]
+      // A one-student detail refresh also updates the local team's index.
+      if (student.isSchoolTeam !== getStudent(student.id).isSchoolTeam) {
+        const next = changedTeams.get(team.id) || { ...team, memberIds: [...team.memberIds] }
+        next.memberIds = next.memberIds.filter(id => id !== student.id)
+        if (student.isSchoolTeam) next.memberIds.push(student.id)
+        changedTeams.set(team.id, next)
+      }
+    }
+    const meta = {}
+    if (update.binding) meta.cloudBinding = update.binding
+    if (update.preferences) for (const key of ['favoriteSchoolIds', 'followedTeamIds']) {
+      const flags = { ...update.preferences[key] }
+      for (const [path, value] of Object.entries(patches)) {
+        const prefix = `dynamic/preferences/${key}/`
+        if (path.startsWith(prefix)) flags[path.slice(prefix.length)] = value
+      }
+      meta[key] = flagIds(flags)
+    }
+    const newRaces = (update.races || []).filter(race => !game.world.races.some(existing => existing.id === race.id))
+    const newAwards = (update.awards || []).filter(award => !game.world.awards.some(existing => existing.id === award.id))
+    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: newRaces, awards: newAwards },
+      { acknowledge: update.acknowledge, cache: update.cache })
+    Object.assign(game.world, meta)
+    for (const student of changed.values()) Object.assign(getStudent(student.id), student)
+    for (const team of changedTeams.values()) Object.assign(getTeam(team.id), team)
+    game.world.races.push(...newRaces)
+    game.world.awards.push(...newAwards)
+    game.revision++
+  }, false)
+}
+
+async function updateMeta(change, cloudPatch) {
   return transaction(async () => {
     const patch = typeof change === 'function' ? change(game.world) : change
     const next = { ...game.world, ...patch }
-    await saveChanges(next)
+    await saveChanges(next, {}, { enqueue: cloudPatch ? cloudOperation('patch', cloudPatch(patch)) : undefined })
     Object.assign(game.world, patch)
     game.revision++
+    if (cloudPatch) queueSync()
   })
 }
 
@@ -138,7 +243,7 @@ export async function toggleFavorite(schoolId) {
       const ids = world.favoriteSchoolIds
       removing = ids.includes(schoolId)
       return { favoriteSchoolIds: removing ? ids.filter(id => id !== schoolId) : [...ids, schoolId] }
-    })
+    }, patch => ({ [`dynamic/preferences/favoriteSchoolIds/${schoolId}`]: patch.favoriteSchoolIds.includes(schoolId) || null }))
     notify(removing ? '已取消收藏學校' : '已收藏學校，可在校內比賽快速選取')
   } catch (error) { notify(`收藏未儲存：${error.message}`) }
 }
@@ -150,24 +255,31 @@ export async function toggleFollow(teamId) {
       const ids = world.followedTeamIds
       removing = ids.includes(teamId)
       return { followedTeamIds: removing ? ids.filter(id => id !== teamId) : [...ids, teamId] }
-    })
+    }, patch => ({ [`dynamic/preferences/followedTeamIds/${teamId}`]: patch.followedTeamIds.includes(teamId) || null }))
     notify(removing ? '已取消關注隊伍' : '隊伍已加入「我的隊伍」')
   } catch (error) { notify(`關注未儲存：${error.message}`) }
 }
 
-export async function editStudent(id, nickname, isSchoolTeam) {
+export async function editStudent(id, changes) {
   return transaction(async () => {
     const original = getStudent(id)
     if (!original) throw new Error('找不到學生資料')
-    const student = { ...original, nickname: nickname.trim().slice(0, 20), isSchoolTeam: Boolean(isSchoolTeam) }
+    const student = { ...original,
+      ...('nickname' in changes ? { nickname: changes.nickname.trim().slice(0, 20) } : {}),
+      ...('isSchoolTeam' in changes ? { isSchoolTeam: Boolean(changes.isSchoolTeam) } : {}),
+    }
     const team = getTeam(getSchool(student.schoolId).teamId)
     const memberIds = team.memberIds.filter(memberId => memberId !== id)
     if (student.isSchoolTeam) memberIds.push(id)
     const changedTeam = { ...team, memberIds }
-    await saveChanges(game.world, { students: [student], teams: [changedTeam] })
+    const patch = {}
+    if (student.nickname !== original.nickname) patch[`dynamic/profiles/${id}/nickname`] = student.nickname
+    if (student.isSchoolTeam !== original.isSchoolTeam) patch[`dynamic/rosters/${team.id}/${id}`] = student.isSchoolTeam || null
+    await saveChanges(game.world, { students: [student], teams: [changedTeam] }, { enqueue: Object.keys(patch).length ? cloudOperation('patch', patch) : undefined })
     Object.assign(original, student)
     Object.assign(team, changedTeam)
     game.revision++
+    if (Object.keys(patch).length) queueSync()
     notify('學生資料已保存')
   })
 }
@@ -375,12 +487,18 @@ export async function recordHeat({ id, sessionId, schoolId, classId, heat, resul
     await saveChanges(game.world, {
       students: changed, races: [race],
       ...(medals ? { awards: medals.awards, teams: [medals.nextTeam] } : {}),
-    })
+    }, { enqueue: cloudOperation('heat', {
+      race,
+      students: changed.map(({ id, schoolId, classId, grade, baseline100, best100 }) => ({ id, schoolId, classId, grade, baseline100, best100 })),
+      awards: medals?.awards || [], teamId: getSchool(schoolId).teamId,
+      teamAwardIds: medals ? medals.nextTeam.awardIds.filter(id => !medals.team.awardIds.includes(id)) : [],
+    }) })
     for (const student of changed) Object.assign(getStudent(student.id), student)
     game.world.races.push(race)
     applyMedals(medals)
     if (rankingChanged) rankStudents(game.world)
     game.revision++
+    queueSync()
     return race
   })
 }
@@ -389,9 +507,13 @@ export async function awardClass(sessionId, classId) {
   return transaction(async () => {
     const medals = medalsForClass(sessionId, classId, game.world.races)
     if (!medals) return
-    await saveChanges(game.world, { awards: medals.awards, teams: [medals.nextTeam] })
+    const patch = {}
+    for (const award of medals.awards) patch[`dynamic/awards/${award.schoolId}/${award.id}`] = award
+    for (const id of medals.nextTeam.awardIds) patch[`dynamic/teamAwards/${medals.team.id}/${id}`] = true
+    await saveChanges(game.world, { awards: medals.awards, teams: [medals.nextTeam] }, { enqueue: cloudOperation('patch', patch) })
     applyMedals(medals)
     game.revision++
+    queueSync()
   })
 }
 
