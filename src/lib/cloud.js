@@ -25,7 +25,10 @@ async function request(path, { method = 'GET', data, query = {}, headers = {}, e
   const url = new URL(`${databaseURL.replace(/\/$/, '')}/${path}.json`)
   url.searchParams.set('auth', token)
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, JSON.stringify(value))
-  if (method !== 'GET') url.searchParams.set('print', 'silent')
+  // RTDB rejects print=silent on conditional writes (HTTP 400). Keep the
+  // normal response for manifest claims/completion; bulk PATCHes stay silent.
+  const conditional = Object.keys(headers).some(key => ['if-match', 'if-none-match'].includes(key.toLowerCase()))
+  if (method !== 'GET' && !conditional) url.searchParams.set('print', 'silent')
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 45000)
   let response
@@ -39,9 +42,12 @@ async function request(path, { method = 'GET', data, query = {}, headers = {}, e
   if (auth.currentUser?.uid !== user.uid) throw new Error('登入狀態已改變，已停止同步。')
   if (response.status === 401 && !refresh) return request(path, { method, data, query, headers, etag }, true)
   if (!response.ok) {
+    const detail = await response.json().catch(() => null)
+    const reason = typeof detail?.error === 'string'
+      ? detail.error.replace(/([?&]auth=)[^&\s]+/g, '$1[redacted]').slice(0, 250) : ''
     const error = new Error(response.status === 401 || response.status === 403
       ? '雲端拒絕存取，請確認資料庫規則與管理者權限。'
-      : response.status === 412 ? '雲端資料已變更，請重試。' : `雲端請求失敗（${response.status}）。`)
+      : response.status === 412 ? '雲端資料已變更，請重試。' : `雲端請求失敗（${response.status}）${reason ? `：${reason}` : '。'}`)
     error.status = response.status
     throw error
   }

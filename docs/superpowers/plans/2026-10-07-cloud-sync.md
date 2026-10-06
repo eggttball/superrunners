@@ -10,4 +10,6 @@
 - [x] 新增 cloud-schema.js 處理逐校固定資料、動態拆分與排名；cloud.js 處理 REST、初始化 claim／續傳、還原、按需讀取及增量寫入。
 - [x] 改造 world.worker.js 與 game.js 啟動流程：本機優先、無本機時雲端還原、不重新隨機產生；所有操作與每組比賽加入 durable outbox。
 - [x] 在學校、隊伍、學生、比賽歷史和應用外框接上按需資料讀取、讀取中／本機 fallback、同步狀態與重試。
-- [ ] 更新 docs/data-structure.md、README 和部署設定；production build、git diff --check、靜態檢查、commit/push 與可用的規則部署。
+- [x] 更新 docs/data-structure.md、README 和部署設定；production build、git diff --check、靜態檢查、commit/push 與可用的規則部署。
+
+首次實際遷移發現 RTDB 不接受 `print=silent` 與 ETag 條件寫入併用；已改為僅一般寫入使用靜默回應，原本 IndexedDB 存檔已開始逐校上傳。
