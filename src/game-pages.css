@@ -177,6 +177,8 @@
 .interior-shell .event-card:hover:not(:disabled) { background: #ffe68a; transform: translateY(-2px); }
 .interior-shell .event-card:disabled { opacity: 1; box-shadow: none; background: #e9eade; border-color: #a3adab; color: #657876; }
 .interior-shell .event-card.relay { background: #e7eae3; border-style: dashed; }
+.interior-shell .event-card.automatic { background: #df8a5f; color: #fff9e8; border-color: #6d3941; box-shadow: 0 4px 0 #6d3941, inset 0 3px 0 #ffffff35; }
+.interior-shell .event-card.automatic:hover:not(:disabled) { background: #ef9e70; }
 .interior-shell .race-hint { color: #4d6c74; background: #eaf0e3; padding: 15px; margin-top: 22px; border-radius: 5px; }
 .interior-shell .race-hint span { color: #617580; }
 .interior-shell .race-history summary { color: var(--ink); }

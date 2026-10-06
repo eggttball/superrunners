@@ -1,7 +1,8 @@
-import { shallowReactive } from 'vue'
+import { reactive, shallowReactive } from 'vue'
 import { saveChanges, exportWorld } from './storage.js'
 import { rankStudents } from './generator.js'
-import { setMusic } from './audio.js'
+import { createSprintProfile } from './physics.js'
+import { playCountdown, playStartWhistle, setMusic, setMusicMode } from './audio.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -10,6 +11,15 @@ export const game = shallowReactive({
 })
 let students = new Map(), schools = new Map(), classes = new Map(), teams = new Map()
 let toastTimer, mutationQueue = Promise.resolve()
+
+// This controller deliberately lives outside RaceView. It keeps a school-wide
+// meet running while the player reads schools, teams, or returns home.
+export const autoMeet = reactive({
+  active: false, schoolId: '', sessionId: '', queue: [], heatIndex: 0,
+  phase: 'idle', athletes: [], elapsed: 0, paused: false, speed: 1,
+  startedAt: '', finishedAt: '', error: '',
+})
+let autoFrame = 0, autoPreviousTimestamp = 0, autoCountdownCue = 0
 
 export function notify(message) {
   game.toast = message
@@ -160,6 +170,150 @@ export async function editStudent(id, nickname, isSchoolTeam) {
     game.revision++
     notify('學生資料已保存')
   })
+}
+
+function automaticHeatQueue(school) {
+  return school.classes
+    .slice()
+    .sort((a, b) => a.grade - b.grade || a.number - b.number)
+    .flatMap(cls => Array.from({ length: Math.ceil(cls.studentIds.length / 8) }, (_, index) => ({
+      classId: cls.id,
+      heat: index + 1,
+      totalHeats: Math.ceil(cls.studentIds.length / 8),
+      studentIds: cls.studentIds.slice(index * 8, index * 8 + 8),
+    })))
+}
+
+function prepareAutomaticHeat() {
+  const heat = autoMeet.queue[autoMeet.heatIndex]
+  if (!heat) return
+  autoMeet.athletes = heat.studentIds.map(id => {
+    const student = getStudent(id)
+    return { student: { ...student }, profile: createSprintProfile(student) }
+  })
+  autoMeet.elapsed = -3
+  autoMeet.paused = false
+  autoMeet.error = ''
+  autoMeet.startedAt = new Date().toISOString()
+  autoMeet.finishedAt = ''
+  autoMeet.phase = 'countdown'
+  autoCountdownCue = 3
+  playCountdown(3)
+}
+
+function automaticMaxTime() {
+  return Math.max(0, ...autoMeet.athletes.map(athlete => athlete.profile.time))
+}
+
+function automaticRunoutEnd() {
+  return Math.max(0, ...autoMeet.athletes.map(athlete => athlete.profile.time + athlete.profile.runoutDuration))
+}
+
+function beginAutomaticLoop() {
+  cancelAnimationFrame(autoFrame)
+  autoPreviousTimestamp = 0
+  autoFrame = requestAnimationFrame(tickAutomaticMeet)
+}
+
+function tickAutomaticMeet(timestamp) {
+  if (!autoMeet.active || autoMeet.phase === 'saveerror') return
+  if (!autoPreviousTimestamp) autoPreviousTimestamp = timestamp
+  const delta = Math.min((timestamp - autoPreviousTimestamp) / 1000, 0.1)
+  autoPreviousTimestamp = timestamp
+  if (!autoMeet.paused) autoMeet.elapsed += delta * autoMeet.speed
+
+  if (autoMeet.phase === 'countdown') {
+    const cue = Math.max(1, Math.ceil(-autoMeet.elapsed))
+    if (cue !== autoCountdownCue) { autoCountdownCue = cue; playCountdown(cue) }
+    if (autoMeet.elapsed >= 0) {
+      autoMeet.phase = 'running'
+      playStartWhistle()
+    }
+  }
+  if (autoMeet.phase === 'running' && autoMeet.elapsed >= automaticMaxTime() && !autoMeet.finishedAt) {
+    autoMeet.finishedAt = new Date().toISOString()
+  }
+  if (autoMeet.phase === 'running' && autoMeet.elapsed >= automaticRunoutEnd()) {
+    autoMeet.elapsed = automaticRunoutEnd()
+    finishAutomaticHeat()
+    return
+  }
+  autoFrame = requestAnimationFrame(tickAutomaticMeet)
+}
+
+async function finishAutomaticHeat() {
+  if (!autoMeet.active || autoMeet.phase !== 'running') return
+  cancelAnimationFrame(autoFrame)
+  autoMeet.phase = 'saving'
+  if (!autoMeet.finishedAt) autoMeet.finishedAt = new Date().toISOString()
+  const heat = autoMeet.queue[autoMeet.heatIndex]
+  try {
+    await recordHeat({
+      id: `${autoMeet.sessionId}-heat-${autoMeet.heatIndex + 1}`,
+      sessionId: autoMeet.sessionId,
+      schoolId: autoMeet.schoolId,
+      classId: heat.classId,
+      heat: heat.heat,
+      startedAt: autoMeet.startedAt,
+      finishedAt: autoMeet.finishedAt,
+      results: autoMeet.athletes
+        .map((athlete, index) => ({ studentId: athlete.student.id, lane: index + 1, time: athlete.profile.time }))
+        .sort((a, b) => a.time - b.time)
+        .map((result, index) => ({ ...result, place: index + 1 })),
+    })
+    if (autoMeet.heatIndex + 1 >= autoMeet.queue.length) {
+      autoMeet.phase = 'complete'
+      autoMeet.active = false
+      setMusicMode('ambient')
+      notify('全校百米賽已全部完成，成績與獎牌已保存。')
+      return
+    }
+    autoMeet.heatIndex += 1
+    prepareAutomaticHeat()
+    beginAutomaticLoop()
+  } catch (error) {
+    autoMeet.error = error.message || '本組成績保存失敗。'
+    autoMeet.phase = 'saveerror'
+    notify(`自動賽程已暫停：${autoMeet.error}`)
+  }
+}
+
+export function startAutomaticMeet(schoolId) {
+  if (autoMeet.active) {
+    notify('已有一場全校百米賽正在進行。')
+    return false
+  }
+  const school = getSchool(schoolId)
+  if (!school) return false
+  const queue = automaticHeatQueue(school)
+  if (!queue.length) return false
+  Object.assign(autoMeet, {
+    active: true, schoolId, sessionId: `auto-${crypto.randomUUID()}`,
+    queue, heatIndex: 0, athletes: [], elapsed: 0, paused: false,
+    speed: 1, phase: 'countdown', startedAt: '', finishedAt: '', error: '',
+  })
+  setMusicMode('race')
+  prepareAutomaticHeat()
+  beginAutomaticLoop()
+  notify(`${school.name}全校百米賽已自動開賽。`)
+  return true
+}
+
+export function toggleAutomaticMeetPause() {
+  if (!autoMeet.active || !['countdown', 'running'].includes(autoMeet.phase)) return
+  autoMeet.paused = !autoMeet.paused
+}
+
+export function setAutomaticMeetSpeed(speed) {
+  if (!autoMeet.active || ![1, 2, 4].includes(speed)) return
+  autoMeet.speed = speed
+}
+
+export function retryAutomaticMeetSave() {
+  if (autoMeet.active && autoMeet.phase === 'saveerror') {
+    autoMeet.phase = 'running'
+    finishAutomaticHeat()
+  }
 }
 
 function medalsForClass(sessionId, classId, races) {
