@@ -14,6 +14,8 @@ const progressLabel = computed(() => ({ population: '正在建立全國班級與
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
 async function logout() { await signOut() }
+function openSchools() { game.nationalRanking = false; go('schools') }
+function openNationalRanking() { game.nationalRanking = true; go('schools') }
 onMounted(() => {
   if (authState.user) initialize()
   watch(() => authState.user, user => { if (user && !game.ready) initialize() })
@@ -47,7 +49,8 @@ onUnmounted(() => {
       <nav v-if="authState.user && game.ready && game.tab !== 'home'" class="page-navigation" aria-label="遊戲選單">
         <button class="return-home" @click="go('home')"><Icon name="back" :size="17" />回主場</button>
         <div class="page-navigation-tabs">
-          <button class="nav-schools" :aria-current="game.tab === 'schools' ? 'page' : undefined" @click="go('schools')"><Icon name="school" :size="17" />學校資料</button>
+          <button class="nav-schools" :aria-current="game.tab === 'schools' && !game.nationalRanking ? 'page' : undefined" @click="openSchools"><Icon name="school" :size="17" />學校資料</button>
+          <button class="nav-national" :aria-current="game.tab === 'schools' && game.nationalRanking ? 'page' : undefined" @click="openNationalRanking"><Icon name="trophy" :size="17" />全國排名</button>
           <button class="nav-teams" :aria-current="game.tab === 'teams' ? 'page' : undefined" @click="go('teams')"><Icon name="team" :size="17" />我的隊伍</button>
           <button class="nav-race" :aria-current="game.tab === 'race' ? 'page' : undefined" @click="go('race')"><Icon name="flag" :size="17" />校內比賽</button>
         </div>

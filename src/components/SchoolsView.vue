@@ -10,7 +10,7 @@ const grade = ref(1)
 const classId = ref('')
 const scope = ref('class')
 const teamOnly = ref(false)
-const nationalRanking = ref(false)
+const nationalRanking = computed({ get: () => game.nationalRanking, set: value => { game.nationalRanking = value } })
 const page = ref(1)
 const pageSize = 15
 const nationalRankingLimit = 300
@@ -54,13 +54,7 @@ function toggleTeamRoster() {
   page.value = 1
 }
 
-function toggleNationalRanking() {
-  nationalRanking.value = !nationalRanking.value
-  teamOnly.value = false
-  page.value = 1
-}
-
-watch(() => game.schoolId, () => { grade.value = 1; classId.value = getSchool(game.schoolId)?.classes.find(cls => cls.grade === 1)?.id || ''; teamOnly.value = false; nationalRanking.value = false; page.value = 1 }, { immediate: true })
+watch(() => game.schoolId, () => { grade.value = 1; classId.value = getSchool(game.schoolId)?.classes.find(cls => cls.grade === 1)?.id || ''; teamOnly.value = false; page.value = 1 }, { immediate: true })
 watch(grade, () => { classId.value = classes.value[0]?.id || '' })
 watch([grade, classId, scope], () => { page.value = 1 })
 watch(pageCount, count => { if (page.value > count) page.value = count })
@@ -68,7 +62,7 @@ watch(pageCount, count => { if (page.value > count) page.value = count })
 
 <template>
   <section class="content-view schools-view">
-    <GamePageHeader title="學校資料" caption="CAMPUS MAP" description="逛逛校園，發掘下一位跑道新星。" theme="schools"><div class="school-hero-actions"><span class="badge"><Icon name="globe" :size="15" />臺灣 · {{ game.world.schools.length }} 所學校</span><button class="btn small" :class="{ primary: nationalRanking }" :aria-pressed="nationalRanking" @click="toggleNationalRanking"><Icon name="trophy" :size="15" />{{ nationalRanking ? '返回學校資料' : '查看全國排名' }}</button></div></GamePageHeader>
+    <GamePageHeader title="學校資料" caption="CAMPUS MAP" description="逛逛校園，發掘下一位跑道新星。" theme="schools"><span class="badge"><Icon name="globe" :size="15" />臺灣 · {{ game.world.schools.length }} 所學校</span></GamePageHeader>
     <div class="school-layout">
       <SchoolPicker v-model="game.schoolId" />
       <div v-if="school" class="panel detail-panel school-detail">

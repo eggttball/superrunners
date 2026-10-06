@@ -49,6 +49,7 @@
 .page-navigation button:hover { background: #fff9e899; }
 .page-navigation button[aria-current='page'] { border-color: var(--ink); background: var(--game-cream); box-shadow: 2px 2px 0 #263c5930; color: var(--ink); }
 .page-navigation .nav-schools[aria-current] { background: #a6e2df; }
+.page-navigation .nav-national[aria-current] { background: #a6e2df; }
 .page-navigation .nav-teams[aria-current] { background: #ddd3fa; }
 .page-navigation .nav-race[aria-current] { background: #ffdc61; }
 .page-hero { position: relative; display: flex; align-items: center; gap: 22px; padding: 22px 26px; margin-bottom: 26px; border: 2px solid var(--ink); border-radius: 9px; background: var(--page-color); box-shadow: var(--game-shadow); }
@@ -61,8 +62,6 @@
 .page-hero-copy p { color: #415b6b; font-size: 12px; }
 .page-hero-extra { margin-left: auto; flex-shrink: 0; }
 .page-hero-extra .badge { background: #fff9e8c9; border-color: #263c5940; }
-.school-hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-.school-hero-actions .btn { white-space: nowrap; }
 .interior-shell .section-title h3, .interior-shell .split-heading h2 { color: var(--ink); font-weight: 800; }
 .interior-shell .section-title h3::before { content: ''; display: inline-block; width: 7px; height: 17px; border-radius: 1px; background: #df846b; flex-shrink: 0; }
 .interior-shell .section-title .muted { font-size: 11px; }

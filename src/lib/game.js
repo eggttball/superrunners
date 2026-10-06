@@ -5,7 +5,7 @@ import { setMusic } from './audio.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
-  revision: 0, tab: 'home', schoolId: '', studentId: '', toast: '', busy: false,
+  revision: 0, tab: 'home', schoolId: '', studentId: '', nationalRanking: false, toast: '', busy: false,
   saving: false, muted: false, audioStarted: false, exportBusy: false,
 })
 let students = new Map(), schools = new Map(), classes = new Map(), teams = new Map()
