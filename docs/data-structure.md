@@ -268,18 +268,27 @@ erDiagram
 
 `medal` 為 `金牌`、`銀牌` 或 `銅牌`；每個班級、每個賽程只會建立一次前三名獎牌。
 
-## 全校自動百米賽的暫存狀態
+## 全校與全國校內自動百米賽的暫存狀態
 
-全校自動百米賽使用前端記憶體中的 `autoMeet` 控制器，可在應用程式內切換首頁、學校資料或我的隊伍後持續進行。
+兩種自動百米賽共用前端記憶體中的 `autoMeet` 控制器，可在應用程式內切換首頁、學校資料或我的隊伍後持續進行。`scope: 'school'` 只安排指定學校；`scope: 'national'` 依臺北市、新北市及學校選單中的其餘縣市順序，逐校完成各自的校內賽。同縣市按教育部學校代碼排序，每校依一年級至三年級、班級號碼、組別順序參賽。
 
 ```js
 {
   active: true,
+  scope: 'national', // school | national
+  runId: 'auto-uuid',
+  schoolIds: ['school-id', 'next-school-id'], // 已排序的參賽學校，不更動世界資料
+  schoolIndex: 0,
   schoolId: 'school-id',
-  sessionId: 'auto-uuid',
-  queue: [/* 依一年級至三年級、每班、每組排序的 heat */],
+  sessionId: 'auto-uuid-school-id', // 每校獨立，獎牌仍按該校各班產生
+  queue: [/* 只有目前學校，依一年級至三年級、每班、每組排序的 heat */],
   heatIndex: 0,
-  phase: 'countdown', // countdown | running | saving | saveerror | complete
+  completedSchools: 0,
+  completedHeats: 0,
+  completedClasses: 0,
+  completedStudents: 0,
+  totalHeats: 123, // 此輪所有參賽學校的組數，依實際班級人數計算
+  phase: 'countdown', // idle | countdown | running | saving | saveerror | complete
   athletes: [/* 當前組選手與跑步 profile */],
   elapsed: -3,
   paused: false,
@@ -289,6 +298,8 @@ erDiagram
   error: ''
 }
 ```
+
+每組成績完成本機交易後才增加完成數、進入下一組；每校最後一組保存後才換校。每組沿用 `recordHeat()` 寫入成績、個人最佳、獎牌及雲端 outbox，並維持相同重試 ID。全國模式只保留學校 ID 清單與目前學校的組別，不額外建立包含全國學生的巨大賽程陣列。暫停與播放速度在換組、換校時延續；開始新一輪時預設 `speed: 1`。最後一校完成後顯示校數、班數、人數及組數總結，返回比賽選單才關閉此完成畫面。
 
 這個控制器**不寫入 IndexedDB**，因此重新整理網頁、關閉分頁或關閉瀏覽器時，尚未完成的自動賽程不會續跑。已完成並寫入 `races` 的組別、已更新的個人最佳成績與已產生的獎牌則會保留。
 

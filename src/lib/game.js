@@ -5,6 +5,7 @@ import { flagIds } from './cloud-schema.js'
 import { rankStudents } from './generator.js'
 import { createSprintProfile } from './physics.js'
 import { playCountdown, playStartWhistle, setMusic, setMusicMode } from './audio.js'
+import { compareSchoolOrder } from './school-order.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -15,10 +16,12 @@ let students = new Map(), schools = new Map(), classes = new Map(), teams = new 
 let toastTimer, mutationQueue = Promise.resolve()
 let initializationStarted = false
 
-// This controller deliberately lives outside RaceView. It keeps a school-wide
-// meet running while the player reads schools, teams, or returns home.
+// This controller deliberately lives outside RaceView. Both automatic modes
+// keep running while the player reads schools, teams, or returns home.
 export const autoMeet = reactive({
   active: false, schoolId: '', sessionId: '', queue: [], heatIndex: 0,
+  scope: 'school', runId: '', schoolIds: [], schoolIndex: 0,
+  completedSchools: 0, completedHeats: 0, completedClasses: 0, completedStudents: 0, totalHeats: 0,
   phase: 'idle', athletes: [], elapsed: 0, paused: false, speed: 1,
   startedAt: '', finishedAt: '', error: '',
 })
@@ -296,6 +299,16 @@ function automaticHeatQueue(school) {
     })))
 }
 
+function prepareAutomaticSchool() {
+  const schoolId = autoMeet.schoolIds[autoMeet.schoolIndex]
+  Object.assign(autoMeet, {
+    schoolId,
+    // Each school has its own session, so medals remain school/class awards.
+    sessionId: `${autoMeet.runId}-${schoolId}`,
+    queue: automaticHeatQueue(getSchool(schoolId)), heatIndex: 0,
+  })
+}
+
 function prepareAutomaticHeat() {
   const heat = autoMeet.queue[autoMeet.heatIndex]
   if (!heat) return
@@ -304,13 +317,12 @@ function prepareAutomaticHeat() {
     return { student: { ...student }, profile: createSprintProfile(student) }
   })
   autoMeet.elapsed = -3
-  autoMeet.paused = false
   autoMeet.error = ''
   autoMeet.startedAt = new Date().toISOString()
   autoMeet.finishedAt = ''
   autoMeet.phase = 'countdown'
   autoCountdownCue = 3
-  playCountdown(3)
+  if (!autoMeet.paused) playCountdown(3)
 }
 
 function automaticMaxTime() {
@@ -332,7 +344,11 @@ function tickAutomaticMeet(timestamp) {
   if (!autoPreviousTimestamp) autoPreviousTimestamp = timestamp
   const delta = Math.min((timestamp - autoPreviousTimestamp) / 1000, 0.1)
   autoPreviousTimestamp = timestamp
-  if (!autoMeet.paused) autoMeet.elapsed += delta * autoMeet.speed
+  if (autoMeet.paused) {
+    autoFrame = requestAnimationFrame(tickAutomaticMeet)
+    return
+  }
+  autoMeet.elapsed += delta * autoMeet.speed
 
   if (autoMeet.phase === 'countdown') {
     const cue = Math.max(1, Math.ceil(-autoMeet.elapsed))
@@ -373,14 +389,21 @@ async function finishAutomaticHeat() {
         .sort((a, b) => a.time - b.time)
         .map((result, index) => ({ ...result, place: index + 1 })),
     })
+    autoMeet.completedHeats++
+    autoMeet.completedStudents += heat.studentIds.length
+    if (heat.heat === heat.totalHeats) autoMeet.completedClasses++
     if (autoMeet.heatIndex + 1 >= autoMeet.queue.length) {
-      autoMeet.phase = 'complete'
-      autoMeet.active = false
-      setMusicMode('ambient')
-      notify('全校百米賽已全部完成，成績與獎牌已保存。')
-      return
-    }
-    autoMeet.heatIndex += 1
+      autoMeet.completedSchools++
+      if (autoMeet.schoolIndex + 1 >= autoMeet.schoolIds.length) {
+        autoMeet.phase = 'complete'
+        autoMeet.active = false
+        setMusicMode('ambient')
+        notify(`${autoMeet.scope === 'national' ? '全國各校' : '全校'}百米賽已全部完成，成績與獎牌已保存。`)
+        return
+      }
+      autoMeet.schoolIndex++
+      prepareAutomaticSchool()
+    } else autoMeet.heatIndex++
     prepareAutomaticHeat()
     beginAutomaticLoop()
   } catch (error) {
@@ -390,30 +413,50 @@ async function finishAutomaticHeat() {
   }
 }
 
-export function startAutomaticMeet(schoolId) {
+function startSchoolItinerary(schoolList, scope) {
   if (autoMeet.active) {
-    notify('已有一場全校百米賽正在進行。')
+    notify('已有自動百米賽正在進行，請先完成目前賽程。')
     return false
   }
-  const school = getSchool(schoolId)
-  if (!school) return false
-  const queue = automaticHeatQueue(school)
-  if (!queue.length) return false
+  if (!schoolList.length) { notify('目前沒有可參賽的學校。'); return false }
+  // Keep only school IDs and the current school's heats, not a national
+  // queue containing every student's ID. Fixed world data stays untouched.
+  const totalHeats = schoolList.reduce((total, school) => total + school.classes.reduce((count, cls) => count + Math.ceil(cls.studentIds.length / 8), 0), 0)
   Object.assign(autoMeet, {
-    active: true, schoolId, sessionId: `auto-${crypto.randomUUID()}`,
-    queue, heatIndex: 0, athletes: [], elapsed: 0, paused: false,
+    active: true, scope, runId: `auto-${crypto.randomUUID()}`,
+    schoolIds: schoolList.map(school => school.id), schoolIndex: 0,
+    completedSchools: 0, completedHeats: 0, completedClasses: 0, completedStudents: 0, totalHeats,
+    athletes: [], elapsed: 0, paused: false,
     speed: 1, phase: 'countdown', startedAt: '', finishedAt: '', error: '',
   })
   setMusicMode('race')
+  prepareAutomaticSchool()
   prepareAutomaticHeat()
   beginAutomaticLoop()
-  notify(`${school.name}全校百米賽已自動開賽。`)
+  notify(scope === 'national' ? `全國 ${schoolList.length} 所學校的校內百米賽已開始，從${schoolList[0].city}出發。` : `${schoolList[0].name}全校百米賽已自動開賽。`)
   return true
 }
 
+export function startAutomaticMeet(schoolId) {
+  const school = getSchool(schoolId)
+  if (!school?.classes.some(cls => cls.studentIds.length)) return false
+  return startSchoolItinerary([school], 'school')
+}
+
+export function startNationalAutomaticMeet() {
+  if (!game.ready) return false
+  const schoolList = game.world.schools.filter(school => school.classes.some(cls => cls.studentIds.length)).sort(compareSchoolOrder)
+  return startSchoolItinerary(schoolList, 'national')
+}
+
+export function dismissAutomaticMeetResult() {
+  if (!autoMeet.active && autoMeet.phase === 'complete') autoMeet.phase = 'idle'
+}
+
 export function toggleAutomaticMeetPause() {
-  if (!autoMeet.active || !['countdown', 'running'].includes(autoMeet.phase)) return
+  if (!autoMeet.active || !['countdown', 'running', 'saving'].includes(autoMeet.phase)) return
   autoMeet.paused = !autoMeet.paused
+  if (!autoMeet.paused && autoMeet.phase === 'countdown') playCountdown(Math.max(1, Math.ceil(-autoMeet.elapsed)))
 }
 
 export function setAutomaticMeetSpeed(speed) {

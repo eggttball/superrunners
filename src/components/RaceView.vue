@@ -1,6 +1,6 @@
 <script setup vapor>
 import { computed, ref, onUnmounted, watch } from 'vue'
-import { autoMeet, game, getSchool, getClass, getStudent, recordHeat, timeText, dateText, notify, retryAutomaticMeetSave, setAutomaticMeetSpeed, startAutomaticMeet, toggleAutomaticMeetPause } from '../lib/game.js'
+import { autoMeet, game, getSchool, getClass, getStudent, recordHeat, timeText, dateText, notify, dismissAutomaticMeetResult, retryAutomaticMeetSave, setAutomaticMeetSpeed, startAutomaticMeet, startNationalAutomaticMeet, toggleAutomaticMeetPause } from '../lib/game.js'
 import { createSprintProfile, distanceAt, speedAt } from '../lib/physics.js'
 import { setMusicMode, playCountdown, playStartWhistle } from '../lib/audio.js'
 import SchoolPicker from './SchoolPicker.vue'
@@ -29,7 +29,8 @@ const finishedAt = ref('')
 const showHistory = ref(false)
 let frame, previousTimestamp = 0, countdownCue = 0
 
-const automatic = computed(() => autoMeet.active)
+const automatic = computed(() => autoMeet.active || autoMeet.phase === 'complete')
+const nationalAutomatic = computed(() => automatic.value && autoMeet.scope === 'national')
 const displayedSchoolId = computed(() => automatic.value ? autoMeet.schoolId : selectedSchoolId.value)
 const racePhase = computed(() => automatic.value ? autoMeet.phase : phase.value)
 const raceQueue = computed(() => automatic.value ? autoMeet.queue : queue.value)
@@ -44,6 +45,9 @@ const classes = computed(() => school.value?.classes.filter(cls => cls.grade ===
 const totalStudents = computed(() => selectedClasses.value.reduce((count, id) => count + getClass(id).studentIds.length, 0))
 const current = computed(() => raceQueue.value[raceHeatIndex.value])
 const currentClass = computed(() => current.value ? getClass(current.value.classId) : null)
+const meetProgress = computed(() => automatic.value
+  ? autoMeet.completedHeats / Math.max(1, autoMeet.totalHeats) * 100
+  : raceHeatIndex.value / Math.max(1, raceQueue.value.length) * 100)
 const countdown = computed(() => Math.max(1, Math.ceil(-raceElapsed.value)))
 const maxTime = computed(() => Math.max(0, ...raceAthletes.value.map(athlete => athlete.profile.time)))
 const runoutEnd = computed(() => Math.max(0, ...raceAthletes.value.map(athlete => athlete.profile.time + athlete.profile.runoutDuration)))
@@ -143,6 +147,10 @@ function enterAutomaticMeet() {
   if (school.value && startAutomaticMeet(selectedSchoolId.value)) window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+function enterNationalAutomaticMeet() {
+  if (phase.value === 'setup' && startNationalAutomaticMeet()) window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 function toggleDisplayedPause() {
   if (automatic.value) toggleAutomaticMeetPause()
   else paused.value = !paused.value
@@ -219,14 +227,14 @@ function nextHeat() {
   else { heatIndex.value++; prepareHeat() }
 }
 
-function returnToSetup() { setMusicMode('ambient'); phase.value = 'setup'; selectedClasses.value = [] }
+function returnToSetup() { dismissAutomaticMeetResult(); setMusicMode('ambient'); phase.value = 'setup'; selectedClasses.value = [] }
 onUnmounted(() => { cancelAnimationFrame(frame); if (!automatic.value) setMusicMode('ambient') })
 </script>
 
 <template>
   <section class="content-view race-view">
     <template v-if="racePhase === 'setup'">
-      <GamePageHeader title="校內比賽" caption="RACE DAY" description="選好班級，今天就來刷新紀錄！" theme="race"><span class="badge"><Icon name="flag" :size="15" />100m SPRINT</span></GamePageHeader>
+      <GamePageHeader title="校內比賽" caption="RACE DAY" description="挑一所主場，或依序舉辦全國各校百米賽。" theme="race"><button class="btn primary national-meet-button" @click="enterNationalAutomaticMeet"><Icon name="globe" :size="20" />全國校內自動百米賽<Icon name="play" :size="17" /></button></GamePageHeader>
       <div class="race-setup-layout">
         <SchoolPicker v-model="selectedSchoolId" />
         <div class="race-setup-detail panel">
@@ -238,16 +246,18 @@ onUnmounted(() => { cancelAnimationFrame(frame); if (!automatic.value) setMusicM
             <div class="event-selection"><span class="eyebrow">02 / 選擇比賽項目</span><div class="event-buttons"><button class="event-card sprint" :disabled="!selectedClasses.length" @click="enterRace"><Icon name="bolt" :size="28" /><div><strong>一百公尺</strong><small>選取班級比賽</small></div><Icon name="arrow" :size="24" /></button><button class="event-card automatic" @click="enterAutomaticMeet"><Icon name="flag" :size="28" /><div><strong>全校自動百米賽</strong><small>一年級至三年級</small></div><Icon name="play" :size="22" /></button><button class="event-card relay" disabled><Icon name="team" :size="28" /><div><strong>大隊接力</strong><small>下一階段開放</small></div><span class="badge">SOON</span></button></div></div>
             <div class="race-hint"><Icon name="clock" :size="19" /><p>全校自動賽會依一年級、二年級、三年級的班級順序持續進行。<br /><span>可切換到其他頁面；賽程仍會繼續，每組完賽自動存檔。</span></p></div>
           </template>
-          <div v-else class="empty-state school-await"><Icon name="school" :size="46" /><h2>先選一所學校</h2><p>從全國名錄或收藏學校中，選擇今天的主場。</p></div>
+          <div v-else class="empty-state school-await"><Icon name="school" :size="46" /><h2>選一所主場，或從全國出發</h2><p>從左側選擇學校，安排班級或全校比賽。</p><p>也可以直接按上方「全國校內自動百米賽」，<br />從臺北市、新北市起，逐縣市、逐校完成一年級至三年級。<br />預設 1 倍速度，可隨時暫停與繼續。</p></div>
         </div>
       </div>
       <div v-if="school" class="panel history-panel"><button class="section-title full-width plain-button" @click="showHistory = !showHistory"><h3><Icon name="clock" :size="19" /> 校內比賽紀錄 <span class="muted">{{ records.length }} 組</span></h3><span class="muted">{{ showHistory ? '收合 −' : '展開 +' }}</span></button><template v-if="showHistory"><p v-if="!records.length" class="empty-state">還沒有比賽紀錄。第一聲起跑槍，從今天開始。</p><details v-for="race in records" :key="race.id" class="race-history"><summary><span>{{ race.className || getClass(race.classId).name }} · 第 {{ race.heat }} 組</span><span>{{ dateText(race.finishedAt) }} · {{ race.results.length }} 人</span></summary><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>學生</th><th>學號</th><th>秒數</th></tr></thead><tbody><tr v-for="result in race.results" :key="result.studentId"><td>{{ result.place }}</td><td><button class="text-button" @click="game.studentId = result.studentId">{{ result.name }}</button></td><td class="mono">{{ result.studentNumber }}</td><td class="mono">{{ timeText(result.time) }}</td></tr></tbody></table></div></details></template></div>
     </template>
 
     <template v-else-if="racePhase !== 'complete'">
-      <div class="race-header"><div><h1>{{ school.name }}<span class="heading-dot">.</span></h1><p class="muted">{{ currentClass.name }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組<span v-if="automatic"> · 全校自動賽</span></p></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
-      <div class="race-progress"><i :style="{ width: (raceHeatIndex / raceQueue.length * 100) + '%' }"></i></div>
-      <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><div class="race-topline-controls"><button v-if="racePhase === 'heatdone'" class="btn small primary next-heat-button" @click="nextHeat">{{ raceHeatIndex + 1 === raceQueue.length ? '查看總結' : '下一組' }}<Icon name="arrow" :size="16" /></button><button v-if="racePhase === 'saveerror'" class="btn small primary" @click="retryDisplayedSave">重試保存</button><button v-if="racePhase === 'running' || racePhase === 'countdown'" class="btn small" @click="toggleDisplayedPause"><Icon :name="racePaused ? 'play' : 'pause'" :size="16" />{{ racePaused ? '繼續' : '暫停' }}</button><button v-for="rate in [1, 2, 4]" :key="rate" class="speed-button" :class="{ active: raceSpeed === rate }" @click="setDisplayedSpeed(rate)">{{ rate }}×</button></div></div><Track :runners="runners" :animated="racePhase === 'running' && !racePaused" :paused="racePhase === 'running' && racePaused" race-mode /><div v-if="racePhase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="racePhase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="racePaused" class="pause-overlay">PAUSED<span>比賽已暫停</span></div></div>
+      <div class="race-header"><div><h1>{{ school.name }}<span class="heading-dot">.</span></h1><p class="muted">{{ currentClass.name }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組<span v-if="automatic"> · {{ nationalAutomatic ? '全國校內自動賽' : '全校自動賽' }}</span></p></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
+      <div v-if="nationalAutomatic" class="national-meet-status" role="status"><span><Icon name="pin" :size="16" /><strong>{{ school.city }}</strong> · 第 {{ autoMeet.schoolIndex + 1 }} / {{ autoMeet.schoolIds.length }} 所學校</span><span>已完成 {{ autoMeet.completedSchools }} 所 · {{ autoMeet.completedHeats.toLocaleString() }} / {{ autoMeet.totalHeats.toLocaleString() }} 組</span></div>
+      <div class="race-progress" role="progressbar" :aria-label="nationalAutomatic ? '全國校內賽程進度' : '賽程進度'" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(meetProgress)"><i :style="{ width: meetProgress + '%' }"></i></div>
+      <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><div class="race-topline-controls"><button v-if="racePhase === 'heatdone'" class="btn small primary next-heat-button" @click="nextHeat">{{ raceHeatIndex + 1 === raceQueue.length ? '查看總結' : '下一組' }}<Icon name="arrow" :size="16" /></button><button v-if="racePhase === 'saveerror'" class="btn small primary" @click="retryDisplayedSave">重試保存</button><button v-if="racePhase === 'running' || racePhase === 'countdown' || (automatic && racePhase === 'saving')" class="btn small" @click="toggleDisplayedPause"><Icon :name="racePaused ? 'play' : 'pause'" :size="16" />{{ racePaused ? '繼續' : '暫停' }}</button><button v-for="rate in [1, 2, 4]" :key="rate" class="speed-button" :class="{ active: raceSpeed === rate }" @click="setDisplayedSpeed(rate)">{{ rate }}×</button></div></div><Track :runners="runners" :animated="racePhase === 'running' && !racePaused" :paused="racePhase === 'running' && racePaused" race-mode /><div v-if="racePhase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="racePhase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="racePaused" class="pause-overlay">PAUSED<span>比賽已暫停</span></div></div>
+      <p v-if="racePhase === 'saveerror'" class="data-note" role="alert">{{ automatic ? autoMeet.error : saveError }}</p>
       <div class="lane-cards">
         <button v-for="(athlete, index) in raceAthletes" :key="athlete.student.id" class="lane-card" @click="game.studentId = athlete.student.id" :style="{ '--runner-color': currentClass.color }">
           <span class="lane-label">LANE <b>{{ index + 1 }}</b></span>
@@ -266,12 +276,12 @@ onUnmounted(() => { cancelAnimationFrame(frame); if (!automatic.value) setMusicM
           </span>
         </button>
       </div>
-      <p class="data-note">{{ automatic ? '全校自動賽會在切換選單後持續進行；可隨時回到這裡查看、暫停或繼續。' : '切換選單會結束目前未完成的賽程；已完賽的組別與成績會保留。' }}</p>
+      <p class="data-note">{{ automatic ? '自動賽程會在切換站內選單後持續進行；可隨時回到這裡查看、暫停或繼續。' : '切換選單會結束目前未完成的賽程；已完賽的組別與成績會保留。' }}</p>
     </template>
 
     <template v-else>
-      <div class="race-complete-hero"><div class="eyebrow">MEET COMPLETE</div><Icon name="trophy" :size="56" /><h1>好比賽。<span>下一次，更快。</span></h1><p class="muted">{{ school.name }} · {{ selectedClasses.length }} 個班級 · {{ sessionResults.length }} 位學生 · {{ sessionRecords.length }} 組比賽</p><span class="badge green"><Icon name="check" :size="16" />所有成績與獎牌均已保存</span></div>
-      <div class="panel meet-summary"><div class="section-title"><h2>本次成績總覽</h2><button class="btn primary" @click="returnToSetup">再辦一場<Icon name="arrow" :size="18" /></button></div><div class="table-wrap"><table class="data-table"><thead><tr><th>本次排序</th><th>學生</th><th>班級</th><th>學號</th><th>100m 成績</th><th>比賽時間</th></tr></thead><tbody><tr v-for="(result, index) in sessionResults" :key="result.studentId"><td>{{ index + 1 }}</td><td><button class="student-link" @click="game.studentId = result.studentId"><PixelRunner :seed="result.studentId" :gender="result.gender || getStudent(result.studentId)?.gender" :height="result.height || getStudent(result.studentId)?.height" :weight="result.weight || getStudent(result.studentId)?.weight" :color="result.classColor || '#c7f36a'" :size="30" />{{ result.name }}</button></td><td>{{ result.className }}</td><td class="mono">{{ result.studentNumber }}</td><td class="mono result-time">{{ timeText(result.time) }} s</td><td>{{ dateText(result.dateTime) }}</td></tr></tbody></table></div></div>
+      <div class="race-complete-hero"><div class="eyebrow">MEET COMPLETE</div><Icon name="trophy" :size="56" /><h1 v-if="nationalAutomatic">全國校內百米賽<span>全部完成！</span></h1><h1 v-else>好比賽。<span>下一次，更快。</span></h1><p v-if="automatic" class="muted">{{ nationalAutomatic ? autoMeet.completedSchools + ' 所學校' : school.name }} · {{ autoMeet.completedClasses.toLocaleString() }} 個班級 · {{ autoMeet.completedStudents.toLocaleString() }} 位學生 · {{ autoMeet.completedHeats.toLocaleString() }} 組比賽</p><p v-else class="muted">{{ school.name }} · {{ selectedClasses.length }} 個班級 · {{ sessionResults.length }} 位學生 · {{ sessionRecords.length }} 組比賽</p><span class="badge green"><Icon name="check" :size="16" />所有成績與獎牌均已保存</span><p v-if="automatic"><button class="btn primary" @click="returnToSetup">返回比賽選單<Icon name="arrow" :size="18" /></button></p></div>
+      <div v-if="!automatic" class="panel meet-summary"><div class="section-title"><h2>本次成績總覽</h2><button class="btn primary" @click="returnToSetup">再辦一場<Icon name="arrow" :size="18" /></button></div><div class="table-wrap"><table class="data-table"><thead><tr><th>本次排序</th><th>學生</th><th>班級</th><th>學號</th><th>100m 成績</th><th>比賽時間</th></tr></thead><tbody><tr v-for="(result, index) in sessionResults" :key="result.studentId"><td>{{ index + 1 }}</td><td><button class="student-link" @click="game.studentId = result.studentId"><PixelRunner :seed="result.studentId" :gender="result.gender || getStudent(result.studentId)?.gender" :height="result.height || getStudent(result.studentId)?.height" :weight="result.weight || getStudent(result.studentId)?.weight" :color="result.classColor || '#c7f36a'" :size="30" />{{ result.name }}</button></td><td>{{ result.className }}</td><td class="mono">{{ result.studentNumber }}</td><td class="mono result-time">{{ timeText(result.time) }} s</td><td>{{ dateText(result.dateTime) }}</td></tr></tbody></table></div></div>
     </template>
   </section>
 </template>

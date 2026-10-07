@@ -3,12 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { game } from '../lib/game.js'
 import Icon from './Icon.vue'
 import { fetchPreferences, syncState } from '../lib/cloud.js'
+import { COUNTIES } from '../lib/school-order.js'
 
 watch(() => syncState.ready, ready => { if (ready) void fetchPreferences().catch(() => {}) }, { immediate: true })
 
 const props = defineProps({ modelValue: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])
-const counties = ['臺北市', '新北市', '桃園市', '臺中市', '臺南市', '高雄市', '基隆市', '新竹市', '新竹縣', '苗栗縣', '彰化縣', '南投縣', '雲林縣', '嘉義市', '嘉義縣', '屏東縣', '宜蘭縣', '花蓮縣', '臺東縣', '澎湖縣', '金門縣', '連江縣']
 const normalize = value => String(value || '').replaceAll('台', '臺').trim().toLowerCase()
 const schools = computed(() => game.world?.schools || [])
 const city = ref(normalize(schools.value.find(school => school.id === props.modelValue)?.city))
@@ -16,7 +16,7 @@ const search = ref('')
 const favoritesOnly = ref(false)
 const awaitingSelection = computed(() => !city.value && !favoritesOnly.value && !search.value.trim())
 const favorites = computed(() => { game.revision; return new Set(game.world?.favoriteSchoolIds || []) })
-const cityOptions = computed(() => counties.map(name => ({ name, count: schools.value.filter(school => normalize(school.city) === name).length })))
+const cityOptions = computed(() => COUNTIES.map(name => ({ name, count: schools.value.filter(school => normalize(school.city) === name).length })))
 const filteredSchools = computed(() => {
   if (awaitingSelection.value) return []
   const query = normalize(search.value)
