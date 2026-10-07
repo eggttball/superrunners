@@ -4,6 +4,16 @@ const TABLES = ['schools', 'students', 'teams', 'races', 'awards']
 let connection
 let legacyCleanup
 
+export async function requestPersistentStorage() {
+  try {
+    if (!navigator.storage?.persist) return false
+    if (await navigator.storage.persisted()) return true
+    return await navigator.storage.persist()
+  } catch {
+    return false
+  }
+}
+
 function clearLegacyDatabases() {
   if (!legacyCleanup) {
     legacyCleanup = Promise.all(LEGACY_DATABASES.map(name => new Promise(resolve => {
@@ -88,7 +98,8 @@ export async function saveLocalMetaPatch(patch) {
 
 export async function loadWorld(onProgress = () => {}) {
   const db = await openDatabase()
-  if (!await value(db.transaction('meta').objectStore('meta').get('world'))) return null
+  const meta = await value(db.transaction('meta').objectStore('meta').get('world'))
+  if (!meta) return null
   // All tables and their metadata must describe the same committed instant.
   const tx = db.transaction(['meta', ...TABLES])
   const done = completion(tx)
@@ -98,10 +109,10 @@ export async function loadWorld(onProgress = () => {}) {
     onProgress({ phase: '讀取本機存檔', progress: ++loaded / TABLES.length })
     return records
   }))
-  const [[meta, ...tables]] = await Promise.all([Promise.all(reads), done])
-  if (!meta) throw new Error('本機存檔不完整，已停止載入以保留資料。')
-  if (meta.schemaVersion !== 3) throw new Error('這份存檔的版本無法讀取；原始資料已保留。')
-  const world = { ...meta }
+  const [[savedMeta, ...tables]] = await Promise.all([Promise.all(reads), done])
+  if (!savedMeta) throw new Error('本機存檔不完整，已停止載入以保留資料。')
+  if (savedMeta.schemaVersion !== 3) throw new Error('這份存檔的版本無法讀取；原始資料已保留。')
+  const world = { ...savedMeta }
   TABLES.forEach((table, index) => { world[table] = tables[index] })
   if (!world.schools.length || !world.students.length || !world.teams.length) throw new Error('本機存檔不完整，已停止載入以保留資料。')
   return world

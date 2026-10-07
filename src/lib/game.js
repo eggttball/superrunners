@@ -1,5 +1,5 @@
 import { reactive, shallowReactive } from 'vue'
-import { saveChanges, saveLocalMetaPatch, exportWorld, pendingOperations } from './storage.js'
+import { saveChanges, saveLocalMetaPatch, requestPersistentStorage, exportWorld, pendingOperations } from './storage.js'
 import { cloudOperation, installCloudSync, queueSync, restoreCloud, retryCloudSync } from './cloud.js'
 import { flagIds } from './cloud-schema.js'
 import { rankStudents } from './generator.js'
@@ -51,6 +51,7 @@ export async function initialize() {
 
 function boot() {
   return new Promise(resolve => {
+    void requestPersistentStorage()
     const worker = new Worker(new URL('./world.worker.js', import.meta.url), { type: 'module' })
     worker.onmessage = async event => {
       const data = event.data
