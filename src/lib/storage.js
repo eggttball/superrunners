@@ -61,6 +61,31 @@ export function metadata(world) {
   return meta
 }
 
+function isClosedConnectionError(error) {
+  const message = String(error?.message || '').toLowerCase()
+  return error?.name === 'InvalidStateError' || message.includes('connection is closing') || message.includes('database is closed')
+}
+
+function reopenAfterClose() {
+  connection = null
+}
+
+export async function saveLocalMetaPatch(patch) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const db = await openDatabase()
+      const tx = db.transaction('meta', 'readwrite')
+      const current = await value(tx.objectStore('meta').get('world'))
+      tx.objectStore('meta').put({ ...(current || {}), ...patch }, 'world')
+      await completion(tx)
+      return
+    } catch (error) {
+      if (!isClosedConnectionError(error) || attempt) throw error
+      reopenAfterClose()
+    }
+  }
+}
+
 export async function loadWorld(onProgress = () => {}) {
   const db = await openDatabase()
   if (!await value(db.transaction('meta').objectStore('meta').get('world'))) return null
@@ -141,22 +166,30 @@ export async function saveInitialWorld(world, onProgress = () => {}) {
 
 // Related mutations share one transaction: a saved result cannot lose its best time or medals.
 export async function saveChanges(world, changes = {}, { enqueue, acknowledge, cache } = {}) {
-  const db = await openDatabase()
-  const tables = Object.keys(changes).filter(table => TABLES.includes(table))
-  const tx = db.transaction(['meta', ...tables, ...(enqueue || acknowledge ? ['outbox'] : []), ...(cache ? ['cloudCache'] : [])], 'readwrite')
-  const done = completion(tx)
-  try {
-    tx.objectStore('meta').put(metadata(world), 'world')
-    for (const table of tables) for (const record of changes[table]) tx.objectStore(table).put(record)
-    if (enqueue) tx.objectStore('outbox').put(enqueue)
-    if (acknowledge) tx.objectStore('outbox').delete(acknowledge)
-    if (cache) tx.objectStore('cloudCache').put(cache)
-  } catch (error) {
-    tx.abort()
-    await done.catch(() => {})
-    throw error
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const db = await openDatabase()
+      const tables = Object.keys(changes).filter(table => TABLES.includes(table))
+      const tx = db.transaction(['meta', ...tables, ...(enqueue || acknowledge ? ['outbox'] : []), ...(cache ? ['cloudCache'] : [])], 'readwrite')
+      const done = completion(tx)
+      try {
+        tx.objectStore('meta').put(metadata(world), 'world')
+        for (const table of tables) for (const record of changes[table]) tx.objectStore(table).put(record)
+        if (enqueue) tx.objectStore('outbox').put(enqueue)
+        if (acknowledge) tx.objectStore('outbox').delete(acknowledge)
+        if (cache) tx.objectStore('cloudCache').put(cache)
+      } catch (error) {
+        tx.abort()
+        await done.catch(() => {})
+        throw error
+      }
+      await done
+      return
+    } catch (error) {
+      if (!isClosedConnectionError(error) || attempt) throw error
+      reopenAfterClose()
+    }
   }
-  await done
 }
 
 export async function pendingOperations() {
@@ -174,7 +207,8 @@ export async function cachedCloudData(id) {
 // table consistent without duplicating the entire national population in memory.
 export async function exportWorld(world, onProgress = () => {}) {
   const parts = ['{']
-  const meta = { ...metadata(world), exportedAt: new Date().toISOString() }
+  const { autoMeetProgress, ...exportMeta } = metadata(world)
+  const meta = { ...exportMeta, exportedAt: new Date().toISOString() }
   parts.push(JSON.stringify(meta).slice(1, -1))
   for (const table of TABLES) {
     parts.push(`,"${table}":[`)

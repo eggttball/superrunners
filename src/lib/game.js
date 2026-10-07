@@ -1,5 +1,5 @@
 import { reactive, shallowReactive } from 'vue'
-import { saveChanges, exportWorld, pendingOperations } from './storage.js'
+import { saveChanges, saveLocalMetaPatch, exportWorld, pendingOperations } from './storage.js'
 import { cloudOperation, installCloudSync, queueSync, restoreCloud, retryCloudSync } from './cloud.js'
 import { flagIds } from './cloud-schema.js'
 import { rankStudents } from './generator.js'
@@ -23,6 +23,7 @@ export const autoMeet = reactive({
   active: false, schoolId: '', sessionId: '', queue: [], heatIndex: 0,
   scope: 'school', runId: '', schoolIds: [], schoolIndex: 0,
   completedSchools: 0, completedHeats: 0, completedClasses: 0, completedStudents: 0, totalHeats: 0,
+  resumeAvailable: false,
   phase: 'idle', athletes: [], elapsed: 0, paused: false, speed: 1,
   startedAt: '', finishedAt: '', error: '',
 })
@@ -90,6 +91,7 @@ function boot() {
         game.ready = true
         game.phase = '全國資料已就緒'
         game.revision++
+        if (world.autoMeetProgress?.active) resumeAutomaticMeet(world.autoMeetProgress)
         resolve()
       }
       if (data.type === 'error') {
@@ -105,6 +107,42 @@ function boot() {
     }
     worker.postMessage({ type: 'initialize' })
   })
+}
+
+function autoMeetSnapshot() {
+  return {
+    active: autoMeet.active, scope: autoMeet.scope, runId: autoMeet.runId,
+    schoolIds: [...autoMeet.schoolIds], schoolIndex: autoMeet.schoolIndex,
+    schoolId: autoMeet.schoolId, sessionId: autoMeet.sessionId,
+    heatIndex: autoMeet.heatIndex, completedSchools: autoMeet.completedSchools,
+    completedHeats: autoMeet.completedHeats, completedClasses: autoMeet.completedClasses,
+    completedStudents: autoMeet.completedStudents, totalHeats: autoMeet.totalHeats,
+    speed: autoMeet.speed, paused: autoMeet.paused,
+  }
+}
+
+function persistAutoMeetProgress() {
+  if (!game.world) return
+  void saveLocalMetaPatch({ autoMeetProgress: autoMeet.active ? autoMeetSnapshot() : null }).catch(error => {
+    if (autoMeet.active) notify(`自動賽進度暫存失敗：${error.message}`)
+  })
+}
+
+function resumeAutomaticMeet(snapshot) {
+  if (!snapshot?.schoolIds?.length || snapshot.schoolIndex >= snapshot.schoolIds.length) return
+  Object.assign(autoMeet, {
+    active: true, scope: snapshot.scope, runId: snapshot.runId,
+    schoolIds: [...snapshot.schoolIds], schoolIndex: snapshot.schoolIndex,
+    completedSchools: snapshot.completedSchools, completedHeats: snapshot.completedHeats,
+    completedClasses: snapshot.completedClasses, completedStudents: snapshot.completedStudents,
+    totalHeats: snapshot.totalHeats, speed: snapshot.speed || 1,
+    paused: Boolean(snapshot.paused), phase: 'countdown', error: '', resumeAvailable: false,
+  })
+  setMusicMode('race')
+  prepareAutomaticSchool()
+  prepareAutomaticHeat(autoClock.start(autoMeet.speed))
+  if (autoMeet.paused) autoClock.pause()
+  else notify(`已從上次進度繼續${autoMeet.scope === 'national' ? '全國' : '全校'}自動百米賽。`)
 }
 
 export const getStudent = id => students.get(id)
@@ -403,7 +441,9 @@ async function finishAutomaticHeat() {
       if (autoMeet.schoolIndex + 1 >= autoMeet.schoolIds.length) {
         autoMeet.phase = 'complete'
         autoMeet.active = false
+        autoMeet.resumeAvailable = false
         autoClock.stop()
+        void saveLocalMetaPatch({ autoMeetProgress: null })
         setMusicMode('ambient')
         notify(`${autoMeet.scope === 'national' ? '全國各校' : '全校'}百米賽已全部完成，成績與獎牌已保存。`)
         return true
@@ -411,6 +451,7 @@ async function finishAutomaticHeat() {
       autoMeet.schoolIndex++
       prepareAutomaticSchool()
     } else autoMeet.heatIndex++
+    persistAutoMeetProgress()
     prepareAutomaticHeat(autoHeatEndedAt)
     return true
   } catch (error) {
@@ -435,12 +476,14 @@ function startSchoolItinerary(schoolList, scope) {
     active: true, scope, runId: `auto-${crypto.randomUUID()}`,
     schoolIds: schoolList.map(school => school.id), schoolIndex: 0,
     completedSchools: 0, completedHeats: 0, completedClasses: 0, completedStudents: 0, totalHeats,
+    resumeAvailable: false,
     athletes: [], elapsed: 0, paused: false,
     speed: 1, phase: 'countdown', startedAt: '', finishedAt: '', error: '',
   })
   setMusicMode('race')
   prepareAutomaticSchool()
   prepareAutomaticHeat(autoClock.start(autoMeet.speed))
+  persistAutoMeetProgress()
   notify(scope === 'national' ? `全國 ${schoolList.length} 所學校的校內百米賽已開始，從${schoolList[0].city}出發。` : `${schoolList[0].name}全校百米賽已自動開賽。`)
   return true
 }
@@ -466,6 +509,7 @@ export function toggleAutomaticMeetPause() {
   if (!autoMeet.paused) { pauseAutomaticMeet(); return }
   autoMeet.paused = false
   autoClock.resume()
+  persistAutoMeetProgress()
   if (autoMeet.phase === 'countdown') playCountdown(Math.max(1, Math.ceil(-autoMeet.elapsed)))
 }
 
@@ -473,6 +517,7 @@ export function pauseAutomaticMeet() {
   if (!autoMeet.active || autoMeet.paused) return
   autoClock.pause()
   autoMeet.paused = true
+  persistAutoMeetProgress()
 }
 
 export function setAutomaticMeetSpeed(speed) {

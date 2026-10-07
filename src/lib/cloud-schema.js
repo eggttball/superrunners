@@ -27,7 +27,7 @@ export function staticTeam(team) {
 }
 
 export function staticMetadata(world) {
-  const { schools, students, teams, races, awards, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, exportedAt, ...meta } = world
+  const { schools, students, teams, races, awards, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, exportedAt, ...meta } = world
   return meta
 }
 
