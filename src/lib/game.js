@@ -6,6 +6,7 @@ import { rankStudents } from './generator.js'
 import { createSprintProfile } from './physics.js'
 import { playCountdown, playStartWhistle, setMusic, setMusicMode } from './audio.js'
 import { compareSchoolOrder } from './school-order.js'
+import { createMeetClock } from './meet-clock.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -25,7 +26,8 @@ export const autoMeet = reactive({
   phase: 'idle', athletes: [], elapsed: 0, paused: false, speed: 1,
   startedAt: '', finishedAt: '', error: '',
 })
-let autoFrame = 0, autoPreviousTimestamp = 0, autoCountdownCue = 0
+let autoCountdownCue = 0, autoAdvancing = false, autoHeatEndedAt = 0
+const autoClock = createMeetClock(() => { void advanceAutomaticMeet() })
 
 export function notify(message) {
   game.toast = message
@@ -309,7 +311,11 @@ function prepareAutomaticSchool() {
   })
 }
 
-function prepareAutomaticHeat() {
+function recentAutomaticCue(at) {
+  return !document.hidden && performance.timeOrigin + performance.now() - at < 750
+}
+
+function prepareAutomaticHeat(at) {
   const heat = autoMeet.queue[autoMeet.heatIndex]
   if (!heat) return
   autoMeet.athletes = heat.studentIds.map(id => {
@@ -318,11 +324,12 @@ function prepareAutomaticHeat() {
   })
   autoMeet.elapsed = -3
   autoMeet.error = ''
-  autoMeet.startedAt = new Date().toISOString()
+  autoMeet.startedAt = new Date(at).toISOString()
   autoMeet.finishedAt = ''
+  autoHeatEndedAt = 0
   autoMeet.phase = 'countdown'
   autoCountdownCue = 3
-  if (!autoMeet.paused) playCountdown(3)
+  if (!autoMeet.paused && recentAutomaticCue(at)) playCountdown(3)
 }
 
 function automaticMaxTime() {
@@ -333,45 +340,44 @@ function automaticRunoutEnd() {
   return Math.max(0, ...autoMeet.athletes.map(athlete => athlete.profile.time + athlete.profile.runoutDuration))
 }
 
-function beginAutomaticLoop() {
-  cancelAnimationFrame(autoFrame)
-  autoPreviousTimestamp = 0
-  autoFrame = requestAnimationFrame(tickAutomaticMeet)
-}
-
-function tickAutomaticMeet(timestamp) {
-  if (!autoMeet.active || autoMeet.phase === 'saveerror') return
-  if (!autoPreviousTimestamp) autoPreviousTimestamp = timestamp
-  const delta = Math.min((timestamp - autoPreviousTimestamp) / 1000, 0.1)
-  autoPreviousTimestamp = timestamp
-  if (autoMeet.paused) {
-    autoFrame = requestAnimationFrame(tickAutomaticMeet)
-    return
-  }
-  autoMeet.elapsed += delta * autoMeet.speed
-
-  if (autoMeet.phase === 'countdown') {
-    const cue = Math.max(1, Math.ceil(-autoMeet.elapsed))
-    if (cue !== autoCountdownCue) { autoCountdownCue = cue; playCountdown(cue) }
-    if (autoMeet.elapsed >= 0) {
-      autoMeet.phase = 'running'
-      playStartWhistle()
+async function advanceAutomaticMeet() {
+  if (autoAdvancing || !autoMeet.active || autoMeet.paused || !['countdown', 'running'].includes(autoMeet.phase)) return
+  autoAdvancing = true
+  try {
+    // A delayed pulse can cover several heats. Consume every interval in
+    // order, awaiting each save before changing heat/class/school.
+    while (autoMeet.active && !autoMeet.paused && ['countdown', 'running'].includes(autoMeet.phase)) {
+      const boundary = autoMeet.phase === 'countdown'
+        ? Math.min(0, Math.floor(autoMeet.elapsed) + 1)
+        : autoMeet.finishedAt ? automaticRunoutEnd() : automaticMaxTime()
+      const remaining = boundary - autoMeet.elapsed
+      const { seconds, at } = autoClock.take(remaining)
+      if (seconds === 0) break
+      autoMeet.elapsed = seconds >= remaining ? boundary : autoMeet.elapsed + seconds
+      if (autoMeet.phase === 'countdown') {
+        const cue = Math.max(1, Math.ceil(-autoMeet.elapsed))
+        if (cue !== autoCountdownCue) {
+          autoCountdownCue = cue
+          if (recentAutomaticCue(at)) playCountdown(cue)
+        }
+        if (autoMeet.elapsed >= 0) {
+          autoMeet.phase = 'running'
+          if (recentAutomaticCue(at)) playStartWhistle()
+        }
+      }
+      if (autoMeet.phase === 'running' && autoMeet.elapsed >= automaticMaxTime() && !autoMeet.finishedAt) {
+        autoMeet.finishedAt = new Date(at).toISOString()
+      }
+      if (autoMeet.phase === 'running' && autoMeet.elapsed >= automaticRunoutEnd()) {
+        autoHeatEndedAt = at
+        if (!await finishAutomaticHeat()) break
+      }
     }
-  }
-  if (autoMeet.phase === 'running' && autoMeet.elapsed >= automaticMaxTime() && !autoMeet.finishedAt) {
-    autoMeet.finishedAt = new Date().toISOString()
-  }
-  if (autoMeet.phase === 'running' && autoMeet.elapsed >= automaticRunoutEnd()) {
-    autoMeet.elapsed = automaticRunoutEnd()
-    finishAutomaticHeat()
-    return
-  }
-  autoFrame = requestAnimationFrame(tickAutomaticMeet)
+  } finally { autoAdvancing = false }
 }
 
 async function finishAutomaticHeat() {
-  if (!autoMeet.active || autoMeet.phase !== 'running') return
-  cancelAnimationFrame(autoFrame)
+  if (!autoMeet.active || !['running', 'saveerror'].includes(autoMeet.phase)) return false
   autoMeet.phase = 'saving'
   if (!autoMeet.finishedAt) autoMeet.finishedAt = new Date().toISOString()
   const heat = autoMeet.queue[autoMeet.heatIndex]
@@ -397,19 +403,22 @@ async function finishAutomaticHeat() {
       if (autoMeet.schoolIndex + 1 >= autoMeet.schoolIds.length) {
         autoMeet.phase = 'complete'
         autoMeet.active = false
+        autoClock.stop()
         setMusicMode('ambient')
         notify(`${autoMeet.scope === 'national' ? '全國各校' : '全校'}百米賽已全部完成，成績與獎牌已保存。`)
-        return
+        return true
       }
       autoMeet.schoolIndex++
       prepareAutomaticSchool()
     } else autoMeet.heatIndex++
-    prepareAutomaticHeat()
-    beginAutomaticLoop()
+    prepareAutomaticHeat(autoHeatEndedAt)
+    return true
   } catch (error) {
+    autoClock.pause()
     autoMeet.error = error.message || '本組成績保存失敗。'
     autoMeet.phase = 'saveerror'
     notify(`自動賽程已暫停：${autoMeet.error}`)
+    return false
   }
 }
 
@@ -431,8 +440,7 @@ function startSchoolItinerary(schoolList, scope) {
   })
   setMusicMode('race')
   prepareAutomaticSchool()
-  prepareAutomaticHeat()
-  beginAutomaticLoop()
+  prepareAutomaticHeat(autoClock.start(autoMeet.speed))
   notify(scope === 'national' ? `全國 ${schoolList.length} 所學校的校內百米賽已開始，從${schoolList[0].city}出發。` : `${schoolList[0].name}全校百米賽已自動開賽。`)
   return true
 }
@@ -455,20 +463,30 @@ export function dismissAutomaticMeetResult() {
 
 export function toggleAutomaticMeetPause() {
   if (!autoMeet.active || !['countdown', 'running', 'saving'].includes(autoMeet.phase)) return
-  autoMeet.paused = !autoMeet.paused
-  if (!autoMeet.paused && autoMeet.phase === 'countdown') playCountdown(Math.max(1, Math.ceil(-autoMeet.elapsed)))
+  if (!autoMeet.paused) { pauseAutomaticMeet(); return }
+  autoMeet.paused = false
+  autoClock.resume()
+  if (autoMeet.phase === 'countdown') playCountdown(Math.max(1, Math.ceil(-autoMeet.elapsed)))
+}
+
+export function pauseAutomaticMeet() {
+  if (!autoMeet.active || autoMeet.paused) return
+  autoClock.pause()
+  autoMeet.paused = true
 }
 
 export function setAutomaticMeetSpeed(speed) {
   if (!autoMeet.active || ![1, 2, 4].includes(speed)) return
+  autoClock.setSpeed(speed)
   autoMeet.speed = speed
 }
 
-export function retryAutomaticMeetSave() {
-  if (autoMeet.active && autoMeet.phase === 'saveerror') {
-    autoMeet.phase = 'running'
-    finishAutomaticHeat()
-  }
+export async function retryAutomaticMeetSave() {
+  if (!autoMeet.active || autoMeet.phase !== 'saveerror' || autoAdvancing) return
+  autoAdvancing = true
+  try {
+    if (await finishAutomaticHeat() && autoMeet.active && !autoMeet.paused) autoClock.resume()
+  } finally { autoAdvancing = false }
 }
 
 function medalsForClass(sessionId, classId, races) {

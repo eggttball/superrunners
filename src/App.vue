@@ -1,6 +1,6 @@
 <script setup vapor>
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { autoMeet, game, initialize, go, toggleMusic, downloadSave, startAudio } from './lib/game.js'
+import { game, initialize, go, toggleMusic, downloadSave, startAudio, pauseAutomaticMeet } from './lib/game.js'
 import { authState, signOut } from './lib/auth.js'
 import { syncState, retryCloudSync, stopCloudSync } from './lib/cloud.js'
 import HomeView from './components/HomeView.vue'
@@ -16,7 +16,7 @@ const displayedProgress = computed(() => syncState.busy && !syncState.ready ? sy
 const saveStatus = computed(() => game.saving ? '保存中' : syncState.busy ? '同步中' : syncState.pending ? `${syncState.pending} 筆待同步` : syncState.ready ? '雲端已同步' : game.ready ? '本機已存檔' : '讀取存檔中')
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
-async function logout() { autoMeet.paused = true; stopCloudSync(); await signOut() }
+async function logout() { pauseAutomaticMeet(); stopCloudSync(); await signOut() }
 function resumeSync() { if (authState.user && game.world) void retryCloudSync() }
 function openSchools() { game.nationalRanking = false; go('schools') }
 function openNationalRanking() { game.nationalRanking = true; go('schools') }
