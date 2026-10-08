@@ -184,7 +184,17 @@ export async function saveChanges(world, changes = {}, { enqueue, acknowledge, c
       const tx = db.transaction(['meta', ...tables, ...(enqueue || acknowledge ? ['outbox'] : []), ...(cache ? ['cloudCache'] : [])], 'readwrite')
       const done = completion(tx)
       try {
-        tx.objectStore('meta').put(metadata(world), 'world')
+        const metaStore = tx.objectStore('meta')
+        const readMeta = metaStore.get('world')
+        readMeta.onsuccess = () => {
+          const nextMeta = metadata(world)
+          // Automatic-meet progress is browser-local state. Cloud merges and
+          // race saves write full metadata, so preserve the newest local value.
+          if (readMeta.result && Object.hasOwn(readMeta.result, 'autoMeetProgress')) {
+            nextMeta.autoMeetProgress = readMeta.result.autoMeetProgress
+          }
+          metaStore.put(nextMeta, 'world')
+        }
         for (const table of tables) for (const record of changes[table]) tx.objectStore(table).put(record)
         if (enqueue) tx.objectStore('outbox').put(enqueue)
         if (acknowledge) tx.objectStore('outbox').delete(acknowledge)

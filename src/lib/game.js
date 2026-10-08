@@ -92,7 +92,12 @@ function boot() {
         game.ready = true
         game.phase = '全國資料已就緒'
         game.revision++
-        if (world.autoMeetProgress?.active) resumeAutomaticMeet(world.autoMeetProgress)
+        const savedProgress = world.autoMeetProgress?.active ? world.autoMeetProgress : null
+        const progress = savedProgress || recoverNationalAutomaticMeet(world)
+        if (progress) {
+          resumeAutomaticMeet(progress)
+          persistAutoMeetProgress()
+        }
         resolve()
       }
       if (data.type === 'error') {
@@ -124,13 +129,76 @@ function autoMeetSnapshot() {
 
 function persistAutoMeetProgress() {
   if (!game.world) return
-  void saveLocalMetaPatch({ autoMeetProgress: autoMeet.active ? autoMeetSnapshot() : null }).catch(error => {
+  const progress = autoMeet.active ? autoMeetSnapshot() : null
+  game.world.autoMeetProgress = progress
+  void saveLocalMetaPatch({ autoMeetProgress: progress }).catch(error => {
     if (autoMeet.active) notify(`自動賽進度暫存失敗：${error.message}`)
   })
 }
 
+function recoverNationalAutomaticMeet(world) {
+  const schoolList = world.schools.filter(school => school.classes.some(cls => cls.studentIds.length)).sort(compareSchoolOrder)
+  const schoolsById = new Map(schoolList.map(school => [school.id, school]))
+  const runs = new Map()
+  for (const race of world.races) {
+    if (!race.sessionId?.startsWith('auto-') || !schoolsById.has(race.schoolId)) continue
+    const suffix = `-${race.schoolId}`
+    if (!race.sessionId.endsWith(suffix)) continue
+    const runId = race.sessionId.slice(0, -suffix.length)
+    if (!runs.has(runId)) runs.set(runId, { runId, racesBySchool: new Map(), latestAt: 0 })
+    const run = runs.get(runId)
+    if (!run.racesBySchool.has(race.schoolId)) run.racesBySchool.set(race.schoolId, [])
+    run.racesBySchool.get(race.schoolId).push(race)
+    run.latestAt = Math.max(run.latestAt, Date.parse(race.finishedAt) || 0)
+  }
+
+  // A national itinerary shares one run ID across multiple schools. School-only
+  // meets have one school and must never be mistaken for a national session.
+  const latestRun = [...runs.values()].sort((a, b) => b.latestAt - a.latestAt)[0]
+  if (!latestRun || latestRun.racesBySchool.size < 2) return null
+
+  let schoolIndex = 0, heatIndex = 0, completedSchools = 0
+  let completedHeats = 0, completedClasses = 0, completedStudents = 0
+  let interrupted = false
+  for (let index = 0; index < schoolList.length; index++) {
+    const school = schoolList[index]
+    const queue = automaticHeatQueue(school)
+    const savedRaces = latestRun.racesBySchool.get(school.id) || []
+    const racesByHeat = new Map(savedRaces.map(race => [`${race.classId}:${race.heat}`, race]))
+    let completedInSchool = 0
+    for (const heat of queue) {
+      const race = racesByHeat.get(`${heat.classId}:${heat.heat}`)
+      if (!race) {
+        schoolIndex = index
+        heatIndex = completedInSchool
+        interrupted = true
+        break
+      }
+      completedInSchool++
+      completedHeats++
+      completedStudents += race.results?.length || 0
+    }
+    for (const cls of school.classes) {
+      const classHeats = queue.filter(heat => heat.classId === cls.id)
+      if (classHeats.length && classHeats.every(heat => racesByHeat.has(`${heat.classId}:${heat.heat}`))) completedClasses++
+    }
+    if (interrupted) break
+    completedSchools++
+  }
+  if (!interrupted) return null
+  return {
+    active: true, scope: 'national', runId: latestRun.runId,
+    schoolIds: schoolList.map(school => school.id), schoolIndex,
+    schoolId: schoolList[schoolIndex]?.id, sessionId: `${latestRun.runId}-${schoolList[schoolIndex]?.id}`,
+    heatIndex, completedSchools, completedHeats, completedClasses, completedStudents,
+    totalHeats: schoolList.reduce((total, school) => total + automaticHeatQueue(school).length, 0),
+    speed: 1, paused: false, recovered: true,
+  }
+}
+
 function resumeAutomaticMeet(snapshot) {
   if (!snapshot?.schoolIds?.length || snapshot.schoolIndex >= snapshot.schoolIds.length) return
+  const heatIndex = Math.max(0, snapshot.heatIndex || 0)
   Object.assign(autoMeet, {
     active: true, scope: snapshot.scope, runId: snapshot.runId,
     schoolIds: [...snapshot.schoolIds], schoolIndex: snapshot.schoolIndex,
@@ -141,9 +209,12 @@ function resumeAutomaticMeet(snapshot) {
   })
   setMusicMode('race')
   prepareAutomaticSchool()
+  autoMeet.heatIndex = Math.min(heatIndex, Math.max(0, autoMeet.queue.length - 1))
   prepareAutomaticHeat(autoClock.start(autoMeet.speed))
   if (autoMeet.paused) autoClock.pause()
-  else notify(`已從上次進度繼續${autoMeet.scope === 'national' ? '全國' : '全校'}自動百米賽。`)
+  else notify(snapshot.recovered
+    ? `已從比賽紀錄找回全國賽進度，從${getSchool(autoMeet.schoolId)?.name || '目前學校'}繼續。`
+    : `已從上次進度繼續${autoMeet.scope === 'national' ? '全國' : '全校'}自動百米賽。`)
 }
 
 export const getStudent = id => students.get(id)
@@ -444,7 +515,7 @@ async function finishAutomaticHeat() {
         autoMeet.active = false
         autoMeet.resumeAvailable = false
         autoClock.stop()
-        void saveLocalMetaPatch({ autoMeetProgress: null })
+        persistAutoMeetProgress()
         setMusicMode('ambient')
         notify(`${autoMeet.scope === 'national' ? '全國各校' : '全校'}百米賽已全部完成，成績與獎牌已保存。`)
         return true
