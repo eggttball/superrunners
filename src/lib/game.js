@@ -522,9 +522,10 @@ export function pauseAutomaticMeet() {
 }
 
 export function setAutomaticMeetSpeed(speed) {
-  if (!autoMeet.active || ![1, 2, 4].includes(speed)) return
+  if (!autoMeet.active || ![1, 2, 4, 8].includes(speed)) return
   autoClock.setSpeed(speed)
   autoMeet.speed = speed
+  persistAutoMeetProgress()
 }
 
 export async function retryAutomaticMeetSave() {
