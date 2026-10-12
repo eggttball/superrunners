@@ -55,9 +55,7 @@ small { font-size: 11px; }
 .auth-avatar { display: inline-flex; align-items: center; justify-content: center; width: 25px; height: 25px; border-radius: 50%; background: var(--accent); color: #1d2b18; font-family: var(--mono); font-weight: 700; }
 .auth-email { max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .auth-user small { color: #7f9677; }
-.save-status { display: flex; align-items: center; gap: 7px; color: #a3b1a7; font-size: 10px; white-space: nowrap; }
-.save-status i, .live-dot { display: inline-block; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
-.pulsing { animation: pulse 1.4s infinite; }
+.live-dot { display: inline-block; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
 .icon-button { border: 1px solid var(--line); border-radius: 7px; background: none; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: #c3cec1; }
 .icon-button:hover { background: var(--panel-raised); color: var(--accent); }
 .icon-button:disabled { opacity: .4; }
@@ -76,6 +74,7 @@ small { font-size: 11px; }
 .eyebrow-separator { font-size: 15px; font-weight: 400; color: #60735c; margin: 0 2px; }
 .badge { display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; letter-spacing: .03em; color: #b9c7b5; background: #b9c7b50b; border: 1px solid #b9c7b519; padding: 5px 9px; border-radius: 4px; white-space: nowrap; }
 .badge.green { color: var(--accent); border-color: #c7f36a25; background: #c7f36a0a; }
+.badge.local-pending { color: #ffd886; background: #8c5b1d38; border-color: #e1ad4d88; font-weight: 700; font-style: normal; }
 .heading-dot { color: var(--accent); margin-left: 4px; }
 .home-view, .content-view { max-width: 1600px; margin: auto; padding: 20px 3.8% 26px; }
 .home-intro { display: flex; align-items: center; justify-content: space-between; gap: 25px; margin-bottom: 15px; }
@@ -328,7 +327,6 @@ select { color-scheme: dark; }
   .topbar { gap: 18px; padding: 0 3%; }
   .main-nav button { padding: 0 11px; }
   .topbar-tools { gap: 8px; }
-  .save-status { display: none; }
   .home-view, .content-view { padding-left: 3%; padding-right: 3%; }
   .menu-card { padding: 17px 12px 15px; }
   .menu-card > strong { font-size: 13px; }

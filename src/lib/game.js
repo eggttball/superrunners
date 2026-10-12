@@ -10,7 +10,7 @@ import { createMeetClock } from './meet-clock.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
-  revision: 0, tab: 'home', schoolId: '', studentId: '', nationalRanking: false, toast: '', busy: false,
+  revision: 0, tab: 'home', schoolId: '', studentId: '', nationalRanking: false, raceTitle: '', toast: '', busy: false,
   saving: false, muted: false, audioStarted: false, exportBusy: false, navigationRevision: 0,
 })
 let students = new Map(), schools = new Map(), classes = new Map(), teams = new Map()
@@ -318,12 +318,19 @@ async function mergeCloudData(update) {
     }
     const newRaces = (update.races || []).filter(race => !game.world.races.some(existing => existing.id === race.id))
     const newAwards = (update.awards || []).filter(award => !game.world.awards.some(existing => existing.id === award.id))
-    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: newRaces, awards: newAwards },
+    const savedRace = update.syncedRaceId && game.world.races.find(race => race.id === update.syncedRaceId)
+    const syncedRace = savedRace?.syncStatus === 'pending' ? { ...savedRace } : null
+    if (syncedRace) delete syncedRace.syncStatus
+    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards },
       { acknowledge: update.acknowledge, cache: update.cache })
     Object.assign(game.world, meta)
     for (const student of changed.values()) Object.assign(getStudent(student.id), student)
     for (const team of changedTeams.values()) Object.assign(getTeam(team.id), team)
     game.world.races.push(...newRaces)
+    if (syncedRace) {
+      Object.assign(savedRace, syncedRace)
+      delete savedRace.syncStatus
+    }
     game.world.awards.push(...newAwards)
     game.revision++
   }, false)
@@ -647,7 +654,7 @@ export async function recordHeat({ id, sessionId, schoolId, classId, heat, resul
     const race = {
       id, sessionId, schoolId, classId, schoolName: getSchool(schoolId).name, className: cls.name,
       classColor: cls.color,
-      heat, event: '100m', startedAt, finishedAt,
+      heat, event: '100m', startedAt, finishedAt, syncStatus: 'pending',
       results: results.map(result => {
         const student = getStudent(result.studentId)
         return { ...result, name: student.name, nickname: student.nickname, gender: student.gender,

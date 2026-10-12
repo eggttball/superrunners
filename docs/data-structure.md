@@ -210,6 +210,7 @@ erDiagram
   event: '100m',
   startedAt: '2026-10-06T00:00:00.000Z',
   finishedAt: '2026-10-06T00:00:18.000Z',
+  syncStatus: 'pending', // 本機 outbox 尚未收到雲端確認時才存在；不會上傳
   results: [/* RaceResult */]
 }
 ```
@@ -236,6 +237,8 @@ erDiagram
 ```
 
 `id` 是單組唯一 ID；再次保存相同 ID 時，系統會直接保留既有紀錄，避免重複建立。`sessionId` 將同一場多組、同一班或全校自動賽串在一起。
+
+成績與待上傳操作會在同一個 IndexedDB 交易中保存。雲端確認前，該組紀錄帶有本機欄位 `syncStatus: 'pending'` 並顯示「本機待同步」；上傳成功並確認本機交易後，欄位會移除。此欄位只用於本機提示，不屬於 Realtime Database 的比賽資料。
 
 ## 獎牌
 

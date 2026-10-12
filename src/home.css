@@ -16,7 +16,6 @@
 .arcade-shell .brand-light { color: var(--game-yellow); }
 .arcade-shell .wordmark small { margin-top: 6px; color: #cde2ea; font-size: 8px; letter-spacing: .22em; }
 .arcade-shell .topbar-tools { margin-left: auto; gap: 10px; }
-.arcade-shell .save-status { color: #bfe6de; }
 .arcade-shell .icon-button, .arcade-shell .auth-user, .arcade-shell .export-button { border: 2px solid #172d44; background: #3e607c; box-shadow: 0 2px #172d44; border-radius: 5px; color: #fff9e8; min-height: 34px; }
 .arcade-shell .auth-user { padding: 5px 10px; gap: 6px; }
 .arcade-shell .export-button { color: #263c59; background: var(--game-yellow); }

@@ -45,6 +45,16 @@ const classes = computed(() => school.value?.classes.filter(cls => cls.grade ===
 const totalStudents = computed(() => selectedClasses.value.reduce((count, id) => count + getClass(id).studentIds.length, 0))
 const current = computed(() => raceQueue.value[raceHeatIndex.value])
 const currentClass = computed(() => current.value ? getClass(current.value.classId) : null)
+const currentRaceRecord = computed(() => {
+  game.revision
+  const raceId = automatic.value ? `${autoMeet.sessionId}-heat-${autoMeet.heatIndex + 1}` : currentHeatId.value
+  return raceId ? game.world.races.find(race => race.id === raceId) : null
+})
+const manualRaceTitle = computed(() => {
+  if (automatic.value || !['ready', 'countdown', 'running', 'saving', 'saveerror', 'heatdone'].includes(phase.value)) return ''
+  if (!school.value || !currentClass.value || !current.value) return ''
+  return `${school.value.city}${school.value.name} ${currentClass.value.name} 第 ${current.value.heat} / ${current.value.totalHeats} 組`
+})
 const meetProgress = computed(() => automatic.value
   ? autoMeet.completedHeats / Math.max(1, autoMeet.totalHeats) * 100
   : raceHeatIndex.value / Math.max(1, raceQueue.value.length) * 100)
@@ -102,6 +112,7 @@ const records = computed(() => { game.revision; return game.world.races.filter(r
 const sessionRecords = computed(() => { game.revision; return game.world.races.filter(race => race.sessionId === displayedSessionId.value) })
 const sessionResults = computed(() => sessionRecords.value.flatMap(race => race.results).sort((a, b) => a.time - b.time))
 watch(selectedSchoolId, value => { selectedClasses.value = []; game.schoolId = value; grade.value = 1 })
+watch(manualRaceTitle, title => { game.raceTitle = title }, { immediate: true })
 watch([showHistory, selectedSchoolId], async ([show, id]) => {
   if (show && id) try { await fetchHistory(id) } catch (error) { notify(error.message) }
 })
@@ -228,7 +239,7 @@ function nextHeat() {
 }
 
 function returnToSetup() { dismissAutomaticMeetResult(); setMusicMode('ambient'); phase.value = 'setup'; selectedClasses.value = [] }
-onUnmounted(() => { cancelAnimationFrame(frame); if (!automatic.value) setMusicMode('ambient') })
+onUnmounted(() => { cancelAnimationFrame(frame); game.raceTitle = ''; if (!automatic.value) setMusicMode('ambient') })
 </script>
 
 <template>
@@ -249,11 +260,11 @@ onUnmounted(() => { cancelAnimationFrame(frame); if (!automatic.value) setMusicM
           <div v-else class="empty-state school-await"><Icon name="school" :size="46" /><h2>選一所主場，或從全國出發</h2><p>從左側選擇學校，安排班級或全校比賽。</p><p>也可以直接按上方「全國校內自動百米賽」，<br />從臺北市、新北市起，逐縣市、逐校完成一年級至三年級。<br />預設 1 倍速度，可隨時暫停與繼續。</p></div>
         </div>
       </div>
-      <div v-if="school" class="panel history-panel"><button class="section-title full-width plain-button" @click="showHistory = !showHistory"><h3><Icon name="clock" :size="19" /> 校內比賽紀錄 <span class="muted">{{ records.length }} 組</span></h3><span class="muted">{{ showHistory ? '收合 −' : '展開 +' }}</span></button><template v-if="showHistory"><p v-if="!records.length" class="empty-state">還沒有比賽紀錄。第一聲起跑槍，從今天開始。</p><details v-for="race in records" :key="race.id" class="race-history"><summary><span>{{ race.className || getClass(race.classId).name }} · 第 {{ race.heat }} 組</span><span>{{ dateText(race.finishedAt) }} · {{ race.results.length }} 人</span></summary><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>學生</th><th>學號</th><th>秒數</th></tr></thead><tbody><tr v-for="result in race.results" :key="result.studentId"><td>{{ result.place }}</td><td><button class="text-button" @click="game.studentId = result.studentId">{{ result.name }}</button></td><td class="mono">{{ result.studentNumber }}</td><td class="mono">{{ timeText(result.time) }}</td></tr></tbody></table></div></details></template></div>
+      <div v-if="school" class="panel history-panel"><button class="section-title full-width plain-button" @click="showHistory = !showHistory"><h3><Icon name="clock" :size="19" /> 校內比賽紀錄 <span class="muted">{{ records.length }} 組</span></h3><span class="muted">{{ showHistory ? '收合 −' : '展開 +' }}</span></button><template v-if="showHistory"><p v-if="!records.length" class="empty-state">還沒有比賽紀錄。第一聲起跑槍，從今天開始。</p><details v-for="race in records" :key="race.id" class="race-history"><summary><span>{{ race.className || getClass(race.classId).name }} · 第 {{ race.heat }} 組</span><span>{{ dateText(race.finishedAt) }} · {{ race.results.length }} 人 <em v-if="race.syncStatus === 'pending'" class="badge local-pending">本機待同步</em></span></summary><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>學生</th><th>學號</th><th>秒數</th></tr></thead><tbody><tr v-for="result in race.results" :key="result.studentId"><td>{{ result.place }}</td><td><button class="text-button" @click="game.studentId = result.studentId">{{ result.name }}</button></td><td class="mono">{{ result.studentNumber }}</td><td class="mono">{{ timeText(result.time) }}</td></tr></tbody></table></div></details></template></div>
     </template>
 
     <template v-else-if="racePhase !== 'complete'">
-      <div class="race-header"><div><h1>{{ school.name }}<span class="heading-dot">.</span></h1><p class="muted">{{ currentClass.name }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組<span v-if="automatic"> · {{ nationalAutomatic ? '全國校內自動賽' : '全校自動賽' }}</span></p></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
+      <div class="race-header"><div><h1>{{ school.name }}<span class="heading-dot">.</span></h1><p class="muted">{{ currentClass.name }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組<span v-if="automatic"> · {{ nationalAutomatic ? '全國校內自動賽' : '全校自動賽' }}</span></p><span v-if="currentRaceRecord?.syncStatus === 'pending'" class="badge local-pending">本機待同步</span></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
       <div v-if="nationalAutomatic" class="national-meet-status" role="status"><span><Icon name="pin" :size="16" /><strong>{{ school.city }}</strong> · 第 {{ autoMeet.schoolIndex + 1 }} / {{ autoMeet.schoolIds.length }} 所學校</span><span>已完成 {{ autoMeet.completedSchools }} 所 · {{ autoMeet.completedHeats.toLocaleString() }} / {{ autoMeet.totalHeats.toLocaleString() }} 組</span></div>
       <div class="race-progress" role="progressbar" :aria-label="nationalAutomatic ? '全國校內賽程進度' : '賽程進度'" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(meetProgress)"><i :style="{ width: meetProgress + '%' }"></i></div>
       <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><div class="race-topline-controls"><button v-if="racePhase === 'heatdone'" class="btn small primary next-heat-button" @click="nextHeat">{{ raceHeatIndex + 1 === raceQueue.length ? '查看總結' : '下一組' }}<Icon name="arrow" :size="16" /></button><button v-if="racePhase === 'saveerror'" class="btn small primary" @click="retryDisplayedSave">重試保存</button><button v-if="racePhase === 'running' || racePhase === 'countdown' || (automatic && racePhase === 'saving')" class="btn small" @click="toggleDisplayedPause"><Icon :name="racePaused ? 'play' : 'pause'" :size="16" />{{ racePaused ? '繼續' : '暫停' }}</button><button v-for="rate in [1, 2, 4, 8]" :key="rate" class="speed-button" :class="{ active: raceSpeed === rate }" @click="setDisplayedSpeed(rate)">{{ rate }}×</button></div></div><Track :runners="runners" :animated="racePhase === 'running' && !racePaused" :paused="racePhase === 'running' && racePaused" race-mode /><div v-if="racePhase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="racePhase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="racePaused" class="pause-overlay">PAUSED<span>比賽已暫停</span></div></div>

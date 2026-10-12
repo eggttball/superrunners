@@ -1,6 +1,6 @@
 <script setup vapor>
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { game, initialize, go, toggleMusic, downloadSave, startAudio, pauseAutomaticMeet } from './lib/game.js'
+import { game, autoMeet, getSchool, getClass, initialize, go, toggleMusic, downloadSave, startAudio, pauseAutomaticMeet } from './lib/game.js'
 import { authState, signOut } from './lib/auth.js'
 import { syncState, retryCloudSync, stopCloudSync } from './lib/cloud.js'
 import HomeView from './components/HomeView.vue'
@@ -13,7 +13,17 @@ import AuthPanel from './components/AuthPanel.vue'
 
 const progressLabel = computed(() => syncState.busy && !syncState.ready ? syncState.phase : ({ population: '正在建立全國班級與學生', ranking: '正在計算全國能力排名', complete: '全國資料生成完成' }[game.phase] || game.phase))
 const displayedProgress = computed(() => syncState.busy && !syncState.ready ? syncState.progress : game.progress)
-const saveStatus = computed(() => game.saving ? '保存中' : syncState.busy ? '同步中' : syncState.pending ? `${syncState.pending} 筆待同步` : syncState.ready ? '雲端已同步' : game.ready ? '本機已存檔' : '讀取存檔中')
+const documentTitle = computed(() => {
+  if (authState.user && autoMeet.active) {
+    const school = getSchool(autoMeet.schoolId)
+    const heat = autoMeet.queue[autoMeet.heatIndex]
+    const cls = heat ? getClass(heat.classId) : null
+    if (school && cls && heat) return `SUPER RUNNERS | ${school.city}${school.name} ${cls.name} 第 ${heat.heat} / ${heat.totalHeats} 組`
+  }
+  if (authState.user && game.tab === 'race' && game.raceTitle) return `SUPER RUNNERS | ${game.raceTitle}`
+  return 'SUPER RUNNERS | 校園田徑經理'
+})
+watch(documentTitle, title => { document.title = title }, { immediate: true })
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
 async function logout() { pauseAutomaticMeet(); stopCloudSync(); await signOut() }
@@ -44,7 +54,6 @@ onUnmounted(() => {
         <span>SUPER<span class="brand-light">RUNNERS</span></span>
       </button>
       <div v-if="authState.user" class="topbar-tools">
-        <span class="save-status"><i :class="{ pulsing: game.saving || syncState.busy || !game.ready }"></i>{{ saveStatus }}</span>
         <button class="icon-button" @click="toggleMusic" :disabled="!game.ready" :aria-label="game.muted ? '開啟背景音樂' : '靜音背景音樂'" :title="game.muted ? '開啟背景音樂' : '靜音背景音樂'"><Icon :name="game.muted ? 'muted' : 'sound'" /></button>
         <button v-if="authState.user" class="auth-user" @click="logout" title="登出" aria-label="登出"><Icon name="user" :size="16" /><span>登出</span></button>
         <button class="btn small export-button" @click="downloadSave" :disabled="!game.ready || game.exportBusy || game.saving"><Icon name="download" :size="16" /><span>{{ game.exportBusy ? '正在匯出…' : '匯出存檔' }}</span></button>
@@ -52,7 +61,6 @@ onUnmounted(() => {
     </header>
 
     <main>
-      <div v-if="authState.user && game.ready && (syncState.error || (!syncState.ready && syncState.busy))" class="cloud-sync-notice" role="status"><span>{{ syncState.busy ? syncState.phase + ' · ' + syncState.progress + '%' : syncState.error }}</span><button class="btn small" :disabled="syncState.busy" @click="resumeSync">{{ syncState.busy ? '同步中…' : '重試同步' }}</button></div>
       <nav v-if="authState.user && game.ready && game.tab !== 'home'" class="page-navigation" aria-label="遊戲選單">
         <button class="return-home" @click="go('home')"><Icon name="back" :size="17" />回主場</button>
         <div class="page-navigation-tabs">

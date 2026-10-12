@@ -192,9 +192,11 @@ async function sendOperation(operation) {
   }
   if (type !== 'heat') throw new Error('無法辨識待同步資料類型。')
   const { race, students, awards, teamId, teamAwardIds } = payload
+  const cloudRace = { ...race }
+  delete cloudRace.syncStatus
   for (let attempt = 0; attempt < 4; attempt++) {
     const bests = await Promise.all(students.map(student => request(`${rootPath()}/dynamic/bests/${student.id}`)))
-    const patch = { [`dynamic/races/${race.schoolId}/${race.id}`]: race }
+    const patch = { [`dynamic/races/${race.schoolId}/${race.id}`]: cloudRace }
     const savedBests = []
     for (let index = 0; index < students.length; index++) {
       const student = students[index]
@@ -227,21 +229,23 @@ export async function retryCloudSync() {
   drain = (async () => {
     syncState.busy = true
     try {
-      syncState.pending = (await pendingOperations()).length
+      let operations = await pendingOperations()
+      syncState.pending = operations.length
       if (!syncState.ready) {
         const binding = await connectCloud(currentWorld())
         await mergeLocal({ binding })
       }
-      let operations = await pendingOperations()
+      operations = await pendingOperations()
+      syncState.pending = operations.length
       while (operations.length) {
-        syncState.pending = operations.length
         const operation = operations[0]
         const update = await sendOperation(operation)
         // A GET started while this write was in flight may have seen the old
         // server value. Invalidate it before removing its local overlay.
         localGeneration++
-        await mergeLocal({ ...update, acknowledge: operation.id })
+        await mergeLocal({ ...update, acknowledge: operation.id, ...(operation.type === 'heat' ? { syncedRaceId: operation.payload.race.id } : {}) })
         operations = await pendingOperations()
+        syncState.pending = operations.length
       }
       syncState.pending = 0
       syncState.error = ''
