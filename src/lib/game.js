@@ -192,7 +192,7 @@ function recoverNationalAutomaticMeet(world) {
     schoolId: schoolList[schoolIndex]?.id, sessionId: `${latestRun.runId}-${schoolList[schoolIndex]?.id}`,
     heatIndex, completedSchools, completedHeats, completedClasses, completedStudents,
     totalHeats: schoolList.reduce((total, school) => total + automaticHeatQueue(school).length, 0),
-    speed: 1, paused: false, recovered: true,
+    speed: 16, paused: false, recovered: true,
   }
 }
 
@@ -557,7 +557,7 @@ function startSchoolItinerary(schoolList, scope) {
     completedSchools: 0, completedHeats: 0, completedClasses: 0, completedStudents: 0, totalHeats,
     resumeAvailable: false,
     athletes: [], elapsed: 0, paused: false,
-    speed: 1, phase: 'countdown', startedAt: '', finishedAt: '', error: '',
+    speed: scope === 'national' ? 16 : 1, phase: 'countdown', startedAt: '', finishedAt: '', error: '',
   })
   setMusicMode('race')
   prepareAutomaticSchool()
@@ -600,7 +600,7 @@ export function pauseAutomaticMeet() {
 }
 
 export function setAutomaticMeetSpeed(speed) {
-  if (!autoMeet.active || ![1, 2, 4, 8].includes(speed)) return
+  if (!autoMeet.active || ![1, 2, 4, 8, 16].includes(speed)) return
   autoClock.setSpeed(speed)
   autoMeet.speed = speed
   persistAutoMeetProgress()
