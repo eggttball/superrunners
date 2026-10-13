@@ -10,7 +10,7 @@ import { createMeetClock } from './meet-clock.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
-  revision: 0, tab: 'home', schoolId: '', studentId: '', nationalRanking: false, raceTitle: '', toast: '', busy: false,
+  revision: 0, tab: 'home', schoolId: '', studentId: '', raceTeamId: '', nationalRanking: false, raceTitle: '', toast: '', busy: false,
   saving: false, muted: false, audioStarted: false, exportBusy: false, navigationRevision: 0,
 })
 let students = new Map(), schools = new Map(), classes = new Map(), teams = new Map()
@@ -226,6 +226,7 @@ export const dateText = value => new Date(value).toLocaleString('zh-TW', { hour1
 export const studentTime = student => Number.isFinite(student.best100) && student.best100 > 0 ? student.best100 : student.baseline100
 
 export function go(tab, schoolId = '') {
+  if (tab !== 'race') game.raceTeamId = ''
   game.tab = tab
   game.navigationRevision++
   if (schoolId) game.schoolId = schoolId
@@ -641,24 +642,35 @@ function applyMedals(medals) {
   Object.assign(medals.team, medals.nextTeam)
 }
 
-export async function recordHeat({ id, sessionId, schoolId, classId, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
+export async function recordHeat({ id, sessionId, schoolId, classId = null, teamId = null, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
   return transaction(async () => {
     const existing = game.world.races.find(race => race.id === id)
     if (existing) return existing
-    const cls = getClass(classId)
-    if (!cls || cls.schoolId !== schoolId || !results.length || results.length > 8 ||
+    const cls = classId ? getClass(classId) : null
+    const team = teamId ? getTeam(teamId) : null
+    const school = getSchool(schoolId)
+    const teamFlag = team && ({ school: 'isSchoolTeam', city: 'isCityTeam', national: 'isNationalTeam' }[team.type])
+    const invalidParticipant = result => {
+      const student = getStudent(result.studentId)
+      return !student || (team
+        ? !team.memberIds.includes(student.id) || !teamFlag || !student[teamFlag]
+        : !cls?.studentIds.includes(student.id))
+    }
+    if (!school || (teamId ? !team : !cls || cls.schoolId !== schoolId) || !results.length || results.length > 8 ||
       new Set(results.map(result => result.studentId)).size !== results.length ||
-      results.some(result => !cls.studentIds.includes(result.studentId) || !Number.isFinite(result.time) || result.time < 10)) {
+      results.some(result => invalidParticipant(result) || !Number.isFinite(result.time) || result.time < 10)) {
       throw new Error('本組成績資料不完整，無法保存。')
     }
     const race = {
-      id, sessionId, schoolId, classId, schoolName: getSchool(schoolId).name, className: cls.name,
-      classColor: cls.color,
+      id, sessionId, schoolId, classId: cls?.id ?? null, teamId: team?.id ?? null, teamName: team?.name ?? null,
+      schoolName: school.name, className: team ? `${team.name} 隊內賽` : cls.name,
+      classColor: cls?.color ?? null,
       heat, event: '100m', startedAt, finishedAt, syncStatus: 'pending',
       results: results.map(result => {
         const student = getStudent(result.studentId)
         return { ...result, name: student.name, nickname: student.nickname, gender: student.gender,
           height: student.height, weight: student.weight, studentNumber: student.studentNumber,
+          schoolId: student.schoolId, classId: student.classId, grade: student.grade,
           className: getClass(student.classId).name, classColor: getClass(student.classId).color,
           schoolName: getSchool(student.schoolId).name, dateTime: finishedAt }
       }).sort((a, b) => a.time - b.time).map((result, index) => ({ ...result, place: index + 1 })),
@@ -668,8 +680,8 @@ export async function recordHeat({ id, sessionId, schoolId, classId, heat, resul
       return { ...student, best100: Number.isFinite(student.best100) && student.best100 > 0 ? Math.min(student.best100, result.time) : result.time }
     })
     const rankingChanged = changed.some(student => Math.round(studentTime(student) * 100) !== Math.round(studentTime(getStudent(student.id)) * 100))
-    const medals = medalsForClass(sessionId, classId, [...game.world.races, race])
-    // Finishing the class commits its heat, personal bests and medals together.
+    const medals = team ? null : medalsForClass(sessionId, classId, [...game.world.races, race])
+    // Class races may award class medals; team races only update personal bests.
     await saveChanges(game.world, {
       students: changed, races: [race],
       ...(medals ? { awards: medals.awards, teams: [medals.nextTeam] } : {}),

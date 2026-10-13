@@ -195,7 +195,7 @@ erDiagram
 
 ### `races[]`
 
-每一筆 `races` 是一組最多八名選手的百米賽，不是一個完整班級賽程。
+每一筆 `races` 是一組最多八名選手的百米賽，不是一個完整班級賽程。校內班級賽以 `classId` 表示來源班級；隊內賽則設定 `classId: null`，並以 `teamId`、`teamName` 表示參賽隊伍。隊內賽每組只接受該隊名單中且具有相符隊籍身份的隊員，更新個人最佳與排名，不產生班級獎牌。
 
 ```js
 {
@@ -203,6 +203,9 @@ erDiagram
   sessionId: 'session-id',
   schoolId: 'school-id',
   classId: 'school-id-1-01',
+  // 隊內賽使用 classId: null，並加上 teamId、teamName。
+  teamId: null,
+  teamName: null,
   schoolName: '○○國中',
   className: '一年級 1 班',
   classColor: '#...',
@@ -229,6 +232,8 @@ erDiagram
   height: 154.3,
   weight: 46.8,
   studentNumber: 'TPE0110101',
+  schoolId: 'school-id',
+  classId: 'school-id-1-01',
   className: '一年級 1 班',
   classColor: '#...',
   schoolName: '○○國中',
@@ -236,7 +241,7 @@ erDiagram
 }
 ```
 
-`id` 是單組唯一 ID；再次保存相同 ID 時，系統會直接保留既有紀錄，避免重複建立。`sessionId` 將同一場多組、同一班或全校自動賽串在一起。
+`id` 是單組唯一 ID；再次保存相同 ID 時，系統會直接保留既有紀錄，避免重複建立。`sessionId` 將同一場多組、同一班、全校自動賽或隊內賽串在一起。隊伍跨校時，每筆 race 的 `schoolId` 是雲端 `dynamic/races/{schoolId}/{raceId}` 的索引學校；各參賽者實際的 `schoolId`、`classId`、`schoolName` 與 `className` 則保留在個人成績中。
 
 成績與待上傳操作會在同一個 IndexedDB 交易中保存。雲端確認前，該組紀錄帶有本機欄位 `syncStatus: 'pending'` 並顯示「本機待同步」；上傳成功並確認本機交易後，欄位會移除。此欄位只用於本機提示，不屬於 Realtime Database 的比賽資料。
 

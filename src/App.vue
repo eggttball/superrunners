@@ -67,7 +67,7 @@ onUnmounted(() => {
           <button class="nav-schools" :aria-current="game.tab === 'schools' && !game.nationalRanking ? 'page' : undefined" @click="openSchools"><Icon name="school" :size="17" />學校資料</button>
           <button class="nav-national" :aria-current="game.tab === 'schools' && game.nationalRanking ? 'page' : undefined" @click="openNationalRanking"><Icon name="trophy" :size="17" />全國排名</button>
           <button class="nav-teams" :aria-current="game.tab === 'teams' ? 'page' : undefined" @click="go('teams')"><Icon name="team" :size="17" />我的隊伍</button>
-          <button class="nav-race" :aria-current="game.tab === 'race' ? 'page' : undefined" @click="go('race')"><Icon name="flag" :size="17" />校內比賽</button>
+          <button class="nav-race" :aria-current="game.tab === 'race' ? 'page' : undefined" @click="game.raceTeamId = ''; go('race')"><Icon name="flag" :size="17" />校內比賽</button>
         </div>
       </nav>
       <div v-if="authState.loading" class="auth-loading panel" role="status">正在確認登入狀態…</div>

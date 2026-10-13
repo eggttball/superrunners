@@ -148,6 +148,17 @@
 .interior-shell .team-list-footer { color: #624f80; font-weight: 700; }
 .interior-shell .team-detail > .split-heading { padding-bottom: 14px; border-bottom: 1px dashed #b0a4bd; }
 .interior-shell .team-detail > .split-heading h2 { font-size: 24px; }
+.interior-shell .team-meet-action { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 18px 0 24px; padding: 14px 16px; background: #fff0bd; border: 1px solid #c5ad6a; border-radius: 6px; }
+.interior-shell .team-meet-action p { margin: 0; font-size: 12px; }
+.interior-shell .team-race-setup { padding: 24px; }
+.interior-shell .team-race-setup > .split-heading { border-bottom: 1px dashed #b5ad83; padding-bottom: 18px; }
+.interior-shell .team-race-roster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 18px 0; }
+.interior-shell .team-race-runner { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; background: #f4f0de; border: 1px solid #263c5926; border-radius: 5px; }
+.interior-shell .team-race-runner > span { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.interior-shell .team-race-runner small { overflow: hidden; color: #586e7c; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.interior-shell .team-race-runner > b { color: #32715d; }
+.interior-shell .team-race-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 16px; border-top: 1px dashed #b5ad83; }
+.interior-shell .team-race-footer p { margin: 0; font-size: 12px; }
 .interior-shell .team-empty, .interior-shell .team-prompt, .interior-shell .school-welcome { background-image: radial-gradient(#8294aa20 1px, transparent 1px); background-size: 16px 16px; }
 .interior-shell .empty-state { color: #5d7580; }
 .interior-shell .empty-state h2 { color: var(--ink); }
@@ -349,6 +360,9 @@
   .interior-shell .table-wrap { overscroll-behavior-x: contain; }
   .interior-shell .data-table td, .interior-shell .data-table th { padding: 10px 12px; }
   .interior-shell .team-detail > .split-heading h2 { font-size: 22px; }
+  .interior-shell .team-meet-action, .interior-shell .team-race-footer { align-items: stretch; flex-direction: column; }
+  .interior-shell .team-race-setup { padding: 16px; }
+  .interior-shell .team-race-roster { grid-template-columns: minmax(0, 1fr); }
   .interior-shell .team-list { grid-auto-columns: 185px; }
   .interior-shell .team-list-card { padding: 14px; }
   .interior-shell .team-emblem { width: 36px; height: 36px; margin-bottom: 10px; }

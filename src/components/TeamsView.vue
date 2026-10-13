@@ -29,6 +29,10 @@ const selected = computed(() => { game.revision; const team = followed.value.fin
 const members = computed(() => { game.revision; return selected.value ? selected.value.memberIds.map(getStudent).filter(Boolean).map(student => ({ ...student })) : [] })
 const awards = computed(() => { game.revision; return selected.value ? game.world.awards.filter(award => selected.value.awardIds.includes(award.id)) : [] })
 const typeLabel = type => ({ school: '學校田徑隊', city: '縣市代表隊', national: '國家代表隊' }[type])
+function startTeamMeet(team) {
+  game.raceTeamId = team.id
+  go('race')
+}
 </script>
 
 <template>
@@ -46,6 +50,7 @@ const typeLabel = type => ({ school: '學校田徑隊', city: '縣市代表隊',
         <div class="split-heading"><div><span class="eyebrow">{{ typeLabel(selected.type) }}</span><h2>{{ selected.name }}</h2></div><button class="btn small ghost" @click="toggleFollow(selected.id)"><Icon name="heart" :size="16" />取消關注</button></div>
         <p class="muted">遊戲內成立於 {{ dateText(selected.createdAt) }}</p>
         <div class="stat-grid compact"><div class="stat-card"><strong>{{ members.length }}</strong><span>田徑隊員</span></div><div class="stat-card"><strong>{{ awards.length }}</strong><span>歷年獎牌</span></div><div class="stat-card"><strong>{{ timeText(Math.min(...members.map(s => s.best100 ?? Infinity))) }}</strong><span>隊內百米最佳 / 秒</span></div></div>
+        <div class="team-meet-action"><p class="muted">由這支隊伍的隊員參賽，每組最多 8 人。</p><button class="btn primary" :disabled="!members.length" @click="startTeamMeet(selected)"><Icon name="bolt" :size="18" />舉辦隊內百米賽<Icon name="arrow" :size="18" /></button></div>
         <div class="section-title"><h3>隊員名單</h3><span class="muted">點選隊員查看完整資料</span></div>
         <div v-if="!members.length" class="empty-state">目前尚無隊員。可在學校資料將學生加入田徑隊。</div>
         <div v-else class="table-wrap"><table class="data-table"><thead><tr><th>隊員</th><th>縣市 / 學校</th><th>班級 / 學號</th><th>百米最佳</th></tr></thead><tbody><tr v-for="student in members" :key="student.id"><td><button class="student-link" @click="game.studentId = student.id"><PixelRunner :seed="student.id" :gender="student.gender" :height="student.height" :weight="student.weight" :color="getClass(student.classId).color" :size="33" /><span>{{ student.name }}<small v-if="student.nickname">{{ student.nickname }}</small></span></button></td><td>{{ getSchool(student.schoolId).city }}<small>{{ getSchool(student.schoolId).name }}</small></td><td>{{ getClass(student.classId).name }}<small class="mono">{{ student.studentNumber }}</small></td><td class="mono">{{ timeText(student.best100) }}<small>{{ student.best100 === null ? '尚未參賽' : '秒' }}</small></td></tr></tbody></table></div>
