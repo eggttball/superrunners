@@ -92,7 +92,9 @@ function boot() {
         game.ready = true
         game.phase = '全國資料已就緒'
         game.revision++
-        const savedProgress = world.autoMeetProgress?.active ? world.autoMeetProgress : null
+        const cancelledRuns = new Set(world.cancelledAutomaticMeetRunIds || [])
+        const savedProgress = world.autoMeetProgress?.active && !cancelledRuns.has(world.autoMeetProgress.runId)
+          ? world.autoMeetProgress : null
         const progress = savedProgress || recoverNationalAutomaticMeet(world)
         if (progress) {
           resumeAutomaticMeet(progress)
@@ -139,6 +141,7 @@ function persistAutoMeetProgress() {
 function recoverNationalAutomaticMeet(world) {
   const schoolList = world.schools.filter(school => school.classes.some(cls => cls.studentIds.length)).sort(compareSchoolOrder)
   const schoolsById = new Map(schoolList.map(school => [school.id, school]))
+  const cancelledRuns = new Set(world.cancelledAutomaticMeetRunIds || [])
   const runs = new Map()
   for (const race of world.races) {
     if (!race.sessionId?.startsWith('auto-') || !schoolsById.has(race.schoolId)) continue
@@ -155,7 +158,7 @@ function recoverNationalAutomaticMeet(world) {
   // A national itinerary shares one run ID across multiple schools. School-only
   // meets have one school and must never be mistaken for a national session.
   const latestRun = [...runs.values()].sort((a, b) => b.latestAt - a.latestAt)[0]
-  if (!latestRun || latestRun.racesBySchool.size < 2) return null
+  if (!latestRun || cancelledRuns.has(latestRun.runId) || latestRun.racesBySchool.size < 2) return null
 
   let schoolIndex = 0, heatIndex = 0, completedSchools = 0
   let completedHeats = 0, completedClasses = 0, completedStudents = 0
@@ -496,6 +499,7 @@ async function advanceAutomaticMeet() {
 
 async function finishAutomaticHeat() {
   if (!autoMeet.active || !['running', 'saveerror'].includes(autoMeet.phase)) return false
+  const runId = autoMeet.runId
   autoMeet.phase = 'saving'
   if (!autoMeet.finishedAt) autoMeet.finishedAt = new Date().toISOString()
   const heat = autoMeet.queue[autoMeet.heatIndex]
@@ -513,6 +517,9 @@ async function finishAutomaticHeat() {
         .sort((a, b) => a.time - b.time)
         .map((result, index) => ({ ...result, place: index + 1 })),
     })
+    // A stop request may arrive while IndexedDB or cloud outbox saving is in
+    // progress. Keep that completed heat, but never advance the canceled run.
+    if (!autoMeet.active || autoMeet.runId !== runId) return false
     autoMeet.completedHeats++
     autoMeet.completedStudents += heat.studentIds.length
     if (heat.heat === heat.totalHeats) autoMeet.completedClasses++
@@ -535,6 +542,7 @@ async function finishAutomaticHeat() {
     prepareAutomaticHeat(autoHeatEndedAt)
     return true
   } catch (error) {
+    if (!autoMeet.active || autoMeet.runId !== runId) return false
     autoClock.pause()
     autoMeet.error = error.message || '本組成績保存失敗。'
     autoMeet.phase = 'saveerror'
@@ -578,6 +586,35 @@ export function startNationalAutomaticMeet() {
   if (!game.ready) return false
   const schoolList = game.world.schools.filter(school => school.classes.some(cls => cls.studentIds.length)).sort(compareSchoolOrder)
   return startSchoolItinerary(schoolList, 'national')
+}
+
+export async function terminateNationalAutomaticMeet() {
+  if (!autoMeet.active || autoMeet.scope !== 'national') return false
+  const cancelledRunId = autoMeet.runId
+  autoClock.stop()
+  Object.assign(autoMeet, {
+    active: false, runId: '', schoolIds: [], schoolIndex: 0, schoolId: '', sessionId: '',
+    queue: [], heatIndex: 0, completedSchools: 0, completedHeats: 0, completedClasses: 0,
+    completedStudents: 0, totalHeats: 0, athletes: [], elapsed: 0, paused: false,
+    phase: 'idle', startedAt: '', finishedAt: '', error: '', resumeAvailable: false,
+  })
+  setMusicMode('ambient')
+
+  const cancelledRuns = new Set(game.world.cancelledAutomaticMeetRunIds || [])
+  if (cancelledRunId) cancelledRuns.add(cancelledRunId)
+  game.world.cancelledAutomaticMeetRunIds = [...cancelledRuns]
+  game.world.autoMeetProgress = null
+  try {
+    await saveLocalMetaPatch({
+      autoMeetProgress: null,
+      cancelledAutomaticMeetRunIds: game.world.cancelledAutomaticMeetRunIds,
+    })
+    notify('全國百米賽程已終止；已完成的成績保留，剩餘賽程不會續跑。')
+    return true
+  } catch (error) {
+    notify(`賽程已停止，但取消狀態無法保存到本機：${error.message}`)
+    return false
+  }
 }
 
 export function dismissAutomaticMeetResult() {

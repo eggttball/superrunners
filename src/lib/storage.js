@@ -193,6 +193,10 @@ export async function saveChanges(world, changes = {}, { enqueue, acknowledge, c
           if (readMeta.result && Object.hasOwn(readMeta.result, 'autoMeetProgress')) {
             nextMeta.autoMeetProgress = readMeta.result.autoMeetProgress
           }
+          nextMeta.cancelledAutomaticMeetRunIds = [...new Set([
+            ...(nextMeta.cancelledAutomaticMeetRunIds || []),
+            ...(readMeta.result?.cancelledAutomaticMeetRunIds || []),
+          ])]
           metaStore.put(nextMeta, 'world')
         }
         for (const table of tables) for (const record of changes[table]) tx.objectStore(table).put(record)
@@ -228,7 +232,7 @@ export async function cachedCloudData(id) {
 // table consistent without duplicating the entire national population in memory.
 export async function exportWorld(world, onProgress = () => {}) {
   const parts = ['{']
-  const { autoMeetProgress, ...exportMeta } = metadata(world)
+  const { autoMeetProgress, cancelledAutomaticMeetRunIds, ...exportMeta } = metadata(world)
   const meta = { ...exportMeta, exportedAt: new Date().toISOString() }
   parts.push(JSON.stringify(meta).slice(1, -1))
   for (const table of TABLES) {

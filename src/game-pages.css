@@ -222,6 +222,8 @@
 .interior-shell .race-control-bar { padding-top: 18px; padding-bottom: 18px; }
 .interior-shell .speed-button { min-height: 36px; min-width: 36px; color: var(--ink); background: #f5f5e9; border: 1px solid #6c8c94; }
 .interior-shell .speed-button.active { border-color: var(--ink); background: #ffdc61; box-shadow: 0 2px 0 var(--ink); font-weight: 700; }
+.interior-shell .terminate-national-meet { color: #fff9e8; background: #c95e4c; border-color: #733d37; box-shadow: 0 2px 0 #733d37; }
+.interior-shell .terminate-national-meet:hover:not(:disabled) { color: #fff9e8; background: #ab493e; }
 .interior-shell .lane-card { background: var(--game-cream); border: 2px solid var(--ink); border-top: 6px solid var(--runner-color); border-radius: 5px; box-shadow: 2px 3px 0 #263c5938; padding: 14px 7px; }
 .interior-shell .lane-card:hover { background: #fff0c0; transform: translateY(-2px); }
 .interior-shell .lane-label { flex-shrink: 0; color: #586f81; font-size: 10px; letter-spacing: 0; margin: 0; white-space: nowrap; }
@@ -324,6 +326,8 @@
   .page-hero { gap: 18px; padding: 20px; }
 }
 @media (max-width: 800px) {
+  .interior-shell .race-stadium .stadium-topline { flex-wrap: wrap; }
+  .interior-shell .race-topline-controls { flex-wrap: wrap; justify-content: flex-end; }
   .interior-shell .school-layout, .interior-shell .race-setup-layout, .interior-shell .teams-layout { grid-template-columns: minmax(0, 1fr); }
   .interior-shell .school-options { max-height: 235px; }
   .interior-shell .team-list { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 210px; gap: 14px; overflow-x: auto; padding: 2px 5px 8px 0; overscroll-behavior-x: contain; scrollbar-width: thin; }
