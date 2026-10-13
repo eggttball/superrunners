@@ -705,8 +705,10 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, team
       heat, event: '100m', startedAt, finishedAt, syncStatus: 'pending',
       results: results.map(result => {
         const student = getStudent(result.studentId)
+        const previousBest100 = Number.isFinite(student.best100) && student.best100 > 0 ? student.best100 : null
         return { ...result, name: student.name, nickname: student.nickname, gender: student.gender,
           height: student.height, weight: student.weight, studentNumber: student.studentNumber,
+          personalBest: previousBest100 === null || result.time < previousBest100, previousBest100,
           schoolId: student.schoolId, classId: student.classId, grade: student.grade,
           className: getClass(student.classId).name, classColor: getClass(student.classId).color,
           schoolName: getSchool(student.schoolId).name, dateTime: finishedAt }

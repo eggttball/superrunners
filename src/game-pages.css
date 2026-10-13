@@ -226,6 +226,15 @@
 .interior-shell .terminate-national-meet:hover:not(:disabled) { color: #fff9e8; background: #ab493e; }
 .interior-shell .lane-card { background: var(--game-cream); border: 2px solid var(--ink); border-top: 6px solid var(--runner-color); border-radius: 5px; box-shadow: 2px 3px 0 #263c5938; padding: 14px 7px; }
 .interior-shell .lane-card:hover { background: #fff0c0; transform: translateY(-2px); }
+.interior-shell .lane-card.new-personal-best { background: #fff0bd; border-color: #c96037; box-shadow: 0 0 0 2px #ffd66c, 0 0 17px #e9814b70, 2px 3px 0 #263c5938; animation: personal-best-pop .65s ease-out; }
+.interior-shell .personal-best-badge, .interior-shell .personal-best-result { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 7px; border: 1px solid #a84a2c; border-radius: 4px; background: #d95f3e; color: #fff9e8; font-size: 10px; font-weight: 900; line-height: 1.2; white-space: nowrap; }
+.interior-shell .personal-best-badge { margin: -2px 0 5px; box-shadow: 1px 2px 0 #983d2f70; animation: personal-best-badge-pop .45s cubic-bezier(.2, 1.4, .45, 1) both; }
+.interior-shell .personal-best-result { font-size: 10px; }
+@keyframes personal-best-pop { 0% { transform: scale(.97); filter: brightness(1); } 38% { transform: scale(1.045); filter: brightness(1.18); } 100% { transform: scale(1); filter: brightness(1); } }
+@keyframes personal-best-badge-pop { 0% { transform: scale(.6) rotate(-5deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .interior-shell .lane-card.new-personal-best, .interior-shell .personal-best-badge { animation: none; }
+}
 .interior-shell .lane-label { flex-shrink: 0; color: #586f81; font-size: 10px; letter-spacing: 0; margin: 0; white-space: nowrap; }
 .interior-shell .lane-label b { color: var(--ink); margin-left: 2px; }
 .interior-shell .live-rank { background: #ffdc61; color: var(--ink); border: 1px solid #a88c43; }
@@ -249,6 +258,9 @@
 .interior-shell .lane-times .lane-current-time { border-color: #b9c9b9; margin-top: 2px; }
 .interior-shell .lane-times .lane-current-time b { color: #29735c; font-size: 17px; font-weight: 700; }
 .interior-shell .data-table .winner-row { background: #fff0bb; }
+.interior-shell .data-table tbody tr.personal-best-row,
+.interior-shell .data-table tbody tr.personal-best-row:nth-child(even) { background: #fff0d1; }
+.interior-shell .personal-best-row .result-time { color: #b84e32; text-shadow: 0 1px #ffdb9d; }
 .interior-shell .winner-row .place-number { background: #ffdc61; color: #6b4c1e; border: 1px solid #b99a4b; }
 .interior-shell .place-number { background: #e5ebe4; color: #496479; }
 .interior-shell .race-complete-hero { padding: 32px 20px; margin-bottom: 28px; background: #fff0bc; border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--game-shadow); }

@@ -226,6 +226,8 @@ erDiagram
   lane: 1,
   time: 14.82,
   place: 1,
+  personalBest: true,
+  previousBest100: 15.04, // null 表示這是第一筆正式百米紀錄
   name: '王小明',
   nickname: '',
   gender: '男',
@@ -240,6 +242,8 @@ erDiagram
   dateTime: '2026-10-06T00:00:18.000Z'
 }
 ```
+
+`personalBest` 表示本次是否刷新（或首次建立）正式百米最佳；`previousBest100` 保存賽前最佳，用於總覽標記。
 
 `id` 是單組唯一 ID；再次保存相同 ID 時，系統會直接保留既有紀錄，避免重複建立。`sessionId` 將同一場多組、同一班、全校自動賽或隊內賽串在一起。隊伍跨校時，每筆 race 的 `schoolId` 是雲端 `dynamic/races/{schoolId}/{raceId}` 的索引學校；各參賽者實際的 `schoolId`、`classId`、`schoolName` 與 `className` 則保留在個人成績中。
 
