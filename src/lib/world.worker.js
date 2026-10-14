@@ -9,6 +9,8 @@ self.onmessage = async event => {
       self.postMessage({ type: 'missing' })
       return
     }
+    world.windMeets ||= []
+    world.windChampions ||= {}
     if (event.data.type === 'restore') {
       rankStudents(world)
       await saveInitialWorld(world, progress)

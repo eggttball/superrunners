@@ -7,6 +7,8 @@ import { createSprintProfile } from './physics.js'
 import { playCountdown, playStartWhistle, setMusic, setMusicMode } from './audio.js'
 import { compareSchoolOrder } from './school-order.js'
 import { createMeetClock } from './meet-clock.js'
+import { createWindMeet, nextWindMatch, completeWindMatch } from './wind-selection.js'
+import { installWindMeet, restoreWindMeet, windMeet } from './wind-meet.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -83,6 +85,8 @@ function boot() {
         classes = new Map()
         for (const school of world.schools) for (const cls of school.classes) classes.set(cls.id, cls)
         game.world = world
+        installWindMeet({ getStudent, saveMatch: recordWindMatch, savePause: saveWindPause })
+        restoreWindMeet(world.windMeets.filter(meet => meet.status === 'running').sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0])
         installCloudSync(() => game.world, mergeCloudData)
         // Existing local data is usable immediately, even with an offline
         // backlog or a long first upload. The outbox preserves new edits.
@@ -224,6 +228,12 @@ export const getStudent = id => students.get(id)
 export const getSchool = id => schools.get(id)
 export const getClass = id => classes.get(id)
 export const getTeam = id => teams.get(id)
+export function getWindTitle(studentId) {
+  game.revision
+  const student = getStudent(studentId)
+  const title = student && game.world?.windChampions?.[student.schoolId]?.[student.grade]
+  return title?.studentId === studentId ? title : null
+}
 export function getSchoolTeamCountForClass(classId) {
   const cls = getClass(classId)
   if (!cls) return 0
@@ -316,6 +326,23 @@ async function mergeCloudData(update) {
       }
     }
     const meta = {}
+    if (update.schoolChampions) {
+      const { schoolId, champions } = update.schoolChampions
+      const merged = { ...champions }
+      for (const operation of pending) {
+        if (operation.type === 'heat' && operation.payload.windChampion && operation.payload.race.schoolId === schoolId) {
+          merged[operation.payload.windChampion.grade] = operation.payload.windChampion
+        }
+      }
+      meta.windChampions = { ...game.world.windChampions, [schoolId]: merged }
+    }
+    const changedWindMeets = (update.windMeets || []).map(meet => {
+      const unsent = pending.map(operation => operation.type === 'heat' ? operation.payload.windMeet :
+        operation.type === 'patch' ? operation.payload[`dynamic/windMeets/${meet.schoolId}/${meet.id}`] : null)
+        .filter(saved => saved?.id === meet.id).at(-1)
+      const local = game.world.windMeets.find(saved => saved.id === meet.id)
+      return unsent || (local?.completedMatches > meet.completedMatches ? local : meet)
+    })
     if (update.binding) meta.cloudBinding = update.binding
     if (update.preferences) for (const key of ['favoriteSchoolIds', 'followedTeamIds']) {
       const flags = { ...update.preferences[key] }
@@ -330,9 +357,14 @@ async function mergeCloudData(update) {
     const savedRace = update.syncedRaceId && game.world.races.find(race => race.id === update.syncedRaceId)
     const syncedRace = savedRace?.syncStatus === 'pending' ? { ...savedRace } : null
     if (syncedRace) delete syncedRace.syncStatus
-    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards },
+    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards, windMeets: changedWindMeets },
       { acknowledge: update.acknowledge, cache: update.cache })
     Object.assign(game.world, meta)
+    for (const meet of changedWindMeets) {
+      const index = game.world.windMeets.findIndex(saved => saved.id === meet.id)
+      if (index < 0) game.world.windMeets.push(meet)
+      else game.world.windMeets[index] = meet
+    }
     for (const student of changed.values()) Object.assign(getStudent(student.id), student)
     for (const team of changedTeams.values()) Object.assign(getTeam(team.id), team)
     game.world.races.push(...newRaces)
@@ -557,6 +589,7 @@ async function finishAutomaticHeat() {
 }
 
 function startSchoolItinerary(schoolList, scope) {
+  if (windMeet.active) { notify('風速小子選拔賽尚未結束，請先完成目前賽程。'); return false }
   if (autoMeet.active) {
     notify('已有自動百米賽正在進行，請先完成目前賽程。')
     return false
@@ -684,30 +717,34 @@ function applyMedals(medals) {
   Object.assign(medals.team, medals.nextTeam)
 }
 
-export async function recordHeat({ id, sessionId, schoolId, classId = null, teamId = null, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
+export async function recordHeat({ id, sessionId, schoolId, classId = null, classIds = [], teamId = null, mode = 'class', windMatchId = null, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
   return transaction(async () => {
     const existing = game.world.races.find(race => race.id === id)
     if (existing) return existing
     const cls = classId ? getClass(classId) : null
     const team = teamId ? getTeam(teamId) : null
     const school = getSchool(schoolId)
+    const crossClass = ['wind-selection', 'wind-practice'].includes(mode)
+    const savedMeet = windMatchId && game.world.windMeets.find(meet => meet.id === sessionId)
+    const match = savedMeet && nextWindMatch(savedMeet)
     const teamFlag = team && ({ school: 'isSchoolTeam', city: 'isCityTeam', national: 'isNationalTeam' }[team.type])
     const invalidParticipant = result => {
       const student = getStudent(result.studentId)
       return !student || (team
         ? !team.memberIds.includes(student.id) || !teamFlag || !student[teamFlag]
-        : !cls?.studentIds.includes(student.id))
+        : crossClass ? student.schoolId !== schoolId || !classIds.includes(student.classId) : !cls?.studentIds.includes(student.id))
     }
-    if (!school || (teamId ? !team : !cls || cls.schoolId !== schoolId) || !results.length || results.length > 8 ||
+    if (!school || (teamId ? !team : crossClass ? !classIds.length || classIds.some(id => getClass(id)?.schoolId !== schoolId) : !cls || cls.schoolId !== schoolId) ||
+      (mode === 'wind-selection' && (!savedMeet || savedMeet.schoolId !== schoolId || match?.id !== windMatchId)) || !results.length || results.length > 8 ||
       new Set(results.map(result => result.studentId)).size !== results.length ||
       results.some(result => invalidParticipant(result) || !Number.isFinite(result.time) || result.time < 10)) {
       throw new Error('本組成績資料不完整，無法保存。')
     }
     const race = {
       id, sessionId, schoolId, classId: cls?.id ?? null, teamId: team?.id ?? null, teamName: team?.name ?? null,
-      schoolName: school.name, className: team ? `${team.name} 隊內賽` : cls.name,
+      schoolName: school.name, className: team ? `${team.name} 隊內賽` : crossClass ? classIds.map(id => getClass(id).name).join(' vs. ') : cls.name,
       classColor: cls?.color ?? null,
-      heat, event: '100m', startedAt, finishedAt, syncStatus: 'pending',
+      heat, event: '100m', mode, classIds, ...(match ? { windMatchId, grade: match.grade, round: match.round } : {}), startedAt, finishedAt, syncStatus: 'pending',
       results: results.map(result => {
         const student = getStudent(result.studentId)
         const previousBest100 = Number.isFinite(student.best100) && student.best100 > 0 ? student.best100 : null
@@ -717,31 +754,76 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, team
           schoolId: student.schoolId, classId: student.classId, grade: student.grade,
           className: getClass(student.classId).name, classColor: getClass(student.classId).color,
           schoolName: getSchool(student.schoolId).name, dateTime: finishedAt }
-      }).sort((a, b) => a.time - b.time).map((result, index) => ({ ...result, place: index + 1 })),
+      }).sort((a, b) => a.time - b.time || a.lane - b.lane).map((result, index) => ({ ...result, place: index + 1 })),
     }
     const changed = results.map(result => {
       const student = getStudent(result.studentId)
       return { ...student, best100: Number.isFinite(student.best100) && student.best100 > 0 ? Math.min(student.best100, result.time) : result.time }
     })
     const rankingChanged = changed.some(student => Math.round(studentTime(student) * 100) !== Math.round(studentTime(getStudent(student.id)) * 100))
-    const medals = team ? null : medalsForClass(sessionId, classId, [...game.world.races, race])
+    const medals = team || crossClass ? null : medalsForClass(sessionId, classId, [...game.world.races, race])
+    const nextMeet = match ? completeWindMatch(savedMeet, windMatchId, race.results, finishedAt) : null
+    const nextChampion = nextMeet?.grades.find(group => group.grade === match.grade)?.champion || null
+    const nextWorld = nextChampion ? { ...game.world, windChampions: {
+      ...game.world.windChampions, [schoolId]: { ...game.world.windChampions[schoolId], [nextChampion.grade]: nextChampion },
+    } } : game.world
     // Class races may award class medals; team races only update personal bests.
-    await saveChanges(game.world, {
+    await saveChanges(nextWorld, {
       students: changed, races: [race],
+      ...(nextMeet ? { windMeets: [nextMeet] } : {}),
       ...(medals ? { awards: medals.awards, teams: [medals.nextTeam] } : {}),
     }, { enqueue: cloudOperation('heat', {
       race,
       students: changed.map(({ id, schoolId, classId, grade, baseline100, best100 }) => ({ id, schoolId, classId, grade, baseline100, best100 })),
       awards: medals?.awards || [], teamId: getSchool(schoolId).teamId,
       teamAwardIds: medals ? medals.nextTeam.awardIds.filter(id => !medals.team.awardIds.includes(id)) : [],
+      ...(nextMeet ? { windMeet: nextMeet } : {}), ...(nextChampion ? { windChampion: nextChampion } : {}),
     }) })
     for (const student of changed) Object.assign(getStudent(student.id), student)
     game.world.races.push(race)
+    if (nextMeet) game.world.windMeets[game.world.windMeets.findIndex(meet => meet.id === nextMeet.id)] = nextMeet
+    if (nextChampion) game.world.windChampions = nextWorld.windChampions
     applyMedals(medals)
     if (rankingChanged) rankStudents(game.world)
     game.revision++
     queueSync()
     return race
+  })
+}
+
+export async function createSchoolWindMeet(schoolId) {
+  return transaction(async () => {
+    if (autoMeet.active || windMeet.active) throw new Error('請先完成目前的自動賽程。')
+    const school = getSchool(schoolId)
+    if (!school) throw new Error('請先選擇學校。')
+    const meet = createWindMeet(school, getStudent)
+    await saveChanges(game.world, { windMeets: [meet] }, { enqueue: cloudOperation('patch', {
+      [`dynamic/windMeets/${schoolId}/${meet.id}`]: meet,
+    }) })
+    game.world.windMeets.push(meet)
+    game.revision++
+    queueSync()
+    return meet
+  })
+}
+
+async function recordWindMatch(meet, match, results, startedAt, finishedAt) {
+  await recordHeat({ id: match.id, sessionId: meet.id, schoolId: meet.schoolId, classIds: match.classIds,
+    mode: 'wind-selection', windMatchId: match.id, heat: meet.completedMatches + 1, results, startedAt, finishedAt })
+  return game.world.windMeets.find(saved => saved.id === meet.id)
+}
+
+async function saveWindPause(meetId, paused) {
+  return transaction(async () => {
+    const meet = game.world.windMeets.find(saved => saved.id === meetId)
+    if (!meet || meet.status !== 'running') return
+    const next = { ...meet, paused }
+    await saveChanges(game.world, { windMeets: [next] }, { enqueue: cloudOperation('patch', {
+      [`dynamic/windMeets/${meet.schoolId}/${meet.id}`]: next,
+    }) })
+    game.world.windMeets[game.world.windMeets.indexOf(meet)] = next
+    game.revision++
+    queueSync()
   })
 }
 

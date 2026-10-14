@@ -10,10 +10,14 @@ import RaceView from './components/RaceView.vue'
 import StudentDialog from './components/StudentDialog.vue'
 import Icon from './components/Icon.vue'
 import AuthPanel from './components/AuthPanel.vue'
+import { windMeet, pauseWindMeet } from './lib/wind-meet.js'
 
 const progressLabel = computed(() => syncState.busy && !syncState.ready ? syncState.phase : ({ population: '正在建立全國班級與學生', ranking: '正在計算全國能力排名', complete: '全國資料生成完成' }[game.phase] || game.phase))
 const displayedProgress = computed(() => syncState.busy && !syncState.ready ? syncState.progress : game.progress)
 const documentTitle = computed(() => {
+  if (authState.user && windMeet.active && windMeet.match) {
+    return `SUPER RUNNERS | ${windMeet.meet.schoolName} 風速小子 ${windMeet.match.classNames.join(' vs. ')} 第 ${windMeet.match.round} 輪`
+  }
   if (authState.user && autoMeet.active) {
     const school = getSchool(autoMeet.schoolId)
     const heat = autoMeet.queue[autoMeet.heatIndex]
@@ -26,7 +30,7 @@ const documentTitle = computed(() => {
 watch(documentTitle, title => { document.title = title }, { immediate: true })
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
-async function logout() { pauseAutomaticMeet(); stopCloudSync(); await signOut() }
+async function logout() { pauseAutomaticMeet(); pauseWindMeet(); stopCloudSync(); await signOut() }
 function resumeSync() { if (authState.user && game.world) void retryCloudSync() }
 function openSchools() { game.nationalRanking = false; go('schools') }
 function openNationalRanking() { game.nationalRanking = true; go('schools') }

@@ -66,6 +66,8 @@ users/{uid}/
       races/{schoolId}/{raceId}
       awards/{schoolId}/{awardId}
       teamAwards/{teamId}/{awardId}: true
+      windMeets/{schoolId}/{meetId}  選拔對戰歷程與歷屆冠軍
+      windChampions/{schoolId}/{grade}  現任風速小子
     rankings/
       class/{classId}/{studentId}: { time, best100 }
       grade/{schoolId}/{grade}/{studentId}: { time, best100 }
@@ -79,7 +81,7 @@ users/{uid}/
 
 ## 寫入、斷線與重試
 
-IndexedDB object store 版本升至 `2`，原本資料格式 `schemaVersion: 3` 與資料庫名稱不變。新增：
+IndexedDB object store 版本目前為 `3`，原本資料格式 `schemaVersion: 3` 與資料庫名稱不變。新增：
 
 - `outbox`：尚未收到雲端確認的動作，包含 `id`、`uid`、`worldId`、`type`、`payload`、`createdAt`。不含任何登入 token。
 - `cloudCache`：按查詢範圍保存的動態快照，包含 `id`、`updatedAt`、`data`。
@@ -87,7 +89,7 @@ IndexedDB object store 版本升至 `2`，原本資料格式 `schemaVersion: 3` 
 操作順序：
 
 1. 本機變更及 outbox 動作在同一個 IndexedDB transaction 寫入。
-2. 前端立即反映已保存的本機資料，頂端區分同步中、待同步、雲端已同步。
+2. 前端立即反映已保存的本機資料；不在每次抵達終點時顯示雲端同步提示。
 3. 同步器依順序上傳；成功後才刪除 outbox 動作。
 4. 中斷後在重新開啟、恢復連線、每 30 秒重試或點「重試同步」時補傳。權限或世界不符的錯誤會顯示在畫面上，未同步動作仍保留。
 
@@ -111,3 +113,11 @@ GitHub Actions 每次推送 `main` 後建置網站，以既有 `FIREBASE_SERVICE
 ## 存檔範圍
 
 匯出 JSON 仍為完整的**目前本機**世界快照，包含從雲端還原／更新過的紀錄；按需同步不會為了匯出而重新下載所有學校的新賽事。`outbox` 和 `cloudCache` 是同步控制資料，不列入原有 JSON 匯出格式。全校及全國校內自動賽的控制器在頁面記憶體，未完成進度另存 IndexedDB；已完成組別會寫入本機與雲端待同步佇列，重新整理後會從最後已保存的組別繼續。全國模式為各校分別產生 `sessionId`，沿用相同逐組同步流程，無須新增雲端資料格式或規則。
+
+## 風速小子選拔資料
+
+每場選拔賽的 `heat` 待同步動作包含 `windMeet`；年級決賽另包含 `windChampion`，與 `race`、個人最佳和排名一起多路徑寫入。開賽／暫停狀態使用 `patch` 動作。既有 outbox 的離線保存與網路恢復補傳機制同樣適用。
+
+新稱號不會寫入固定的學校或學生節點。`windChampions/{schoolId}` 僅在進入該校資料、取得隊員／個人詳情或選拔歷史時讀取。展開「風速小子歷屆選拔」僅讀該校 `windMeets` 和稱號，不下載全部校內百米紀錄。查詢結果仍經本機交易佇列及待同步操作覆蓋，避免離線的新冠軍被舊雲端回應覆寫。
+
+全新瀏覽器還原時，各校的選拔歷程與稱號一起還原；有本機固定資料時只升級 IndexedDB 新資料表，不重抓全國學生。

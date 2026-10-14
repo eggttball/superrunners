@@ -4,6 +4,7 @@ import { game, go, getTeam, getStudent, getSchool, getClass, toggleFollow, timeT
 import Icon from './Icon.vue'
 import PixelRunner from './PixelRunner.vue'
 import GamePageHeader from './GamePageHeader.vue'
+import WindTitleBadge from './WindTitleBadge.vue'
 import { fetchPreferences, fetchTeam, syncState } from '../lib/cloud.js'
 import { useCloudRequest } from '../lib/useCloudRequest.js'
 
@@ -53,7 +54,7 @@ function startTeamMeet(team) {
         <div class="team-meet-action"><p class="muted">由這支隊伍的隊員參賽，每組最多 8 人。</p><button class="btn primary" :disabled="!members.length" @click="startTeamMeet(selected)"><Icon name="bolt" :size="18" />舉辦隊內百米賽<Icon name="arrow" :size="18" /></button></div>
         <div class="section-title"><h3>隊員名單</h3><span class="muted">點選隊員查看完整資料</span></div>
         <div v-if="!members.length" class="empty-state">目前尚無隊員。可在學校資料將學生加入田徑隊。</div>
-        <div v-else class="table-wrap"><table class="data-table"><thead><tr><th>隊員</th><th>縣市 / 學校</th><th>班級 / 學號</th><th>百米最佳</th></tr></thead><tbody><tr v-for="student in members" :key="student.id"><td><button class="student-link" @click="game.studentId = student.id"><PixelRunner :seed="student.id" :gender="student.gender" :height="student.height" :weight="student.weight" :color="getClass(student.classId).color" :size="33" /><span>{{ student.name }}<small v-if="student.nickname">{{ student.nickname }}</small></span></button></td><td>{{ getSchool(student.schoolId).city }}<small>{{ getSchool(student.schoolId).name }}</small></td><td>{{ getClass(student.classId).name }}<small class="mono">{{ student.studentNumber }}</small></td><td class="mono">{{ timeText(student.best100) }}<small>{{ student.best100 === null ? '尚未參賽' : '秒' }}</small></td></tr></tbody></table></div>
+        <div v-else class="table-wrap"><table class="data-table"><thead><tr><th>隊員</th><th>縣市 / 學校</th><th>班級 / 學號</th><th>百米最佳</th></tr></thead><tbody><tr v-for="student in members" :key="student.id"><td><button class="student-link" @click="game.studentId = student.id"><PixelRunner :seed="student.id" :gender="student.gender" :height="student.height" :weight="student.weight" :color="getClass(student.classId).color" :size="33" /><span>{{ student.name }}<WindTitleBadge :student-id="student.id" /><small v-if="student.nickname">{{ student.nickname }}</small></span></button></td><td>{{ getSchool(student.schoolId).city }}<small>{{ getSchool(student.schoolId).name }}</small></td><td>{{ getClass(student.classId).name }}<small class="mono">{{ student.studentNumber }}</small></td><td class="mono">{{ timeText(student.best100) }}<small>{{ student.best100 === null ? '尚未參賽' : '秒' }}</small></td></tr></tbody></table></div>
         <div class="section-title"><h3>歷年榮譽</h3><Icon name="trophy" :size="20" /></div>
         <p v-if="!awards.length" class="empty-state small-empty">獎牌櫃等著第一場勝利。校內百米各班前三名會留下紀錄。</p>
         <div v-for="award in awards" :key="award.id" class="award-row"><span class="medal-icon" :class="'medal-' + award.place"><Icon name="trophy" :size="20" /></span><div><strong>{{ award.year }} · {{ award.competition }} · {{ award.medal }}</strong><small>{{ award.studentName }} · 100 公尺</small></div><b class="mono">{{ timeText(award.time) }} s</b></div>

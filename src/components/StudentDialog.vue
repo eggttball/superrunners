@@ -3,6 +3,7 @@ import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { game, getStudent, getSchool, getClass, editStudent, timeText, dateText } from '../lib/game.js'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
+import WindTitleBadge from './WindTitleBadge.vue'
 import { fetchStudent } from '../lib/cloud.js'
 
 const dialog = ref(null)
@@ -40,6 +41,12 @@ const history = computed(() => {
 })
 const visibleHistory = computed(() => history.value.slice(0, historyLimit.value))
 const medalCount = computed(() => { game.revision; return student.value ? game.world.awards.filter(award => award.studentId === student.value.id).length : 0 })
+const windHonors = computed(() => {
+  game.revision
+  return game.world.windMeets.flatMap(meet => meet.grades.map(group => group.champion)
+    .filter(champion => champion?.studentId === student.value?.id))
+    .sort((a, b) => b.awardedAt.localeCompare(a.awardedAt))
+})
 
 function close() { if (!saving.value) game.studentId = '' }
 
@@ -98,7 +105,7 @@ onUnmounted(() => {
   <dialog ref="dialog" class="student-dialog" aria-labelledby="student-dialog-title" aria-describedby="student-dialog-description" @cancel.prevent="close" @keydown="trapFocus" @click="backdropClick">
     <form v-if="student && school && classroom" class="student-profile" @submit.prevent="save">
       <header class="profile-header"><div><span class="eyebrow">ATHLETE PROFILE</span><p id="student-dialog-description">每一步，都有自己的節奏。</p></div><button type="button" class="dialog-close" data-dialog-close :disabled="saving" aria-label="關閉學生資料" @click="close"><Icon name="close" :size="21" /></button></header>
-      <div class="profile-identity"><div class="profile-avatar" :style="{ '--class-color': classroom.color }"><PixelRunner :seed="student.id" :gender="student.gender" :height="student.height" :weight="student.weight" :color="classroom.color" :size="104" /></div><div class="profile-name"><span class="badge green"><i class="uniform-dot" :style="{ background: classroom.color }"></i>{{ school.city }} · {{ classroom.name }}</span><h2 id="student-dialog-title">{{ student.name }}<span v-if="student.nickname">{{ student.nickname }}</span></h2><p>{{ school.name }}</p><span class="student-id mono">{{ student.studentNumber }}</span></div><div class="profile-best"><span>100M PERSONAL BEST</span><strong>{{ timeText(student.best100) }}<small v-if="student.best100 !== null">s</small></strong><small>{{ student.best100 === null ? '尚未參賽' : '百米個人最佳' }}</small></div></div>
+      <div class="profile-identity"><div class="profile-avatar" :style="{ '--class-color': classroom.color }"><PixelRunner :seed="student.id" :gender="student.gender" :height="student.height" :weight="student.weight" :color="classroom.color" :size="104" /></div><div class="profile-name"><span class="badge green"><i class="uniform-dot" :style="{ background: classroom.color }"></i>{{ school.city }} · {{ classroom.name }}</span><WindTitleBadge :student-id="student.id" /><h2 id="student-dialog-title">{{ student.name }}<span v-if="student.nickname">{{ student.nickname }}</span></h2><p>{{ school.name }}</p><span class="student-id mono">{{ student.studentNumber }}</span></div><div class="profile-best"><span>100M PERSONAL BEST</span><strong>{{ timeText(student.best100) }}<small v-if="student.best100 !== null">s</small></strong><small>{{ student.best100 === null ? '尚未參賽' : '百米個人最佳' }}</small></div></div>
       <div class="profile-body">
         <div class="profile-basics"><div><span>性別</span><strong>{{ student.gender }}</strong></div><div><span>年齡</span><strong>{{ student.age }}<small>歲</small></strong></div><div><span>身高</span><strong>{{ student.height }}<small>cm</small></strong></div><div><span>體重</span><strong>{{ student.weight }}<small>kg</small></strong></div><div><span>學校代碼</span><strong class="school-number">{{ school.officialCode }}</strong></div></div>
         <div class="profile-section-heading"><h3>跑者能力</h3><span>初始能力 · 1–10</span></div>
@@ -112,6 +119,7 @@ onUnmounted(() => {
         <label class="school-team-toggle"><div><Icon name="team" :size="21" /><span><strong>學校田徑隊員</strong><small>加入或移出 {{ school.name }}田徑隊</small></span></div><input v-model="isSchoolTeam" @change="teamEdited = true" type="checkbox" :disabled="saving" /><span class="switch-visual" aria-hidden="true"></span></label>
         <div class="representative-status"><div><Icon name="flag" :size="16" /><span>縣市代表隊</span><span class="badge" :class="{ green: student.isCityTeam }">{{ student.isCityTeam ? '已入選' : '未入選' }}</span></div><div><Icon name="globe" :size="16" /><span>國家代表隊</span><span class="badge" :class="{ green: student.isNationalTeam }">{{ student.isNationalTeam ? '已入選' : '未入選' }}</span></div></div>
         <p class="profile-note">代表隊身分由系統選拔產生；自動選拔將於下一階段開放。</p>
+        <template v-if="windHonors.length"><div class="profile-section-heading"><h3><Icon name="sprint" :size="17" />風速小子榮譽</h3><span>{{ windHonors.length }} 屆冠軍</span></div><div v-for="honor in windHonors" :key="honor.meetId" class="wind-profile-honor"><span>{{ honor.className }}<small>{{ dateText(honor.awardedAt) }}</small></span><b class="mono">{{ timeText(honor.time) }}s</b></div></template>
         <div class="profile-section-heading history-heading"><h3><Icon name="clock" :size="17" />比賽紀錄</h3><span>{{ history.length }} 次出賽 · {{ medalCount }} 面獎牌</span></div>
         <div v-if="!history.length" class="profile-history-empty"><Icon name="flag" :size="25" /><strong>故事，從第一場比賽開始</strong><p>完賽時間與當時的姓名、班級會永久保留在這裡。</p></div>
         <div v-else class="profile-history"><div v-for="record in visibleHistory" :key="record.id" class="individual-record"><div class="record-place">#{{ record.place }}</div><div class="record-info"><strong>100 公尺 · {{ record.className }} · 第 {{ record.heat }} 組</strong><span>{{ record.name }}{{ record.nickname ? `（${record.nickname}）` : '' }} · {{ record.studentNumber }} · 第 {{ record.lane }} 道</span><small>{{ dateText(record.dateTime) }} · {{ record.schoolName }}</small></div><b class="mono">{{ timeText(record.time) }}<small>s</small></b></div><button v-if="history.length > historyLimit" type="button" class="btn small ghost more-history" @click="historyLimit += 10">顯示更多紀錄（還有 {{ history.length - historyLimit }} 筆）</button></div>

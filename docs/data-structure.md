@@ -6,12 +6,12 @@
 
 - IndexedDB 資料庫名稱：`superrunners-taiwan-v3`
 - 資料結構版本：`schemaVersion: 3`
-- IndexedDB object store 版本：`2`，升級保留原有資料。
+- IndexedDB object store 版本：`3`，升級保留原有資料。
 - 每個瀏覽器各自保有本機快取，同一帳號連結同一個雲端世界。
 - 既有存檔首次連接時上傳至雲端。新的瀏覽器從雲端還原，不再重新隨機生成世界；有本機固定資料時不再重複下載。
 - 舊版資料庫 `superrunners-taiwan-v1`、`superrunners-taiwan-v2` 會在啟動時清除。
 
-資料庫使用一個 `meta` store、五個實體資料表與兩個同步資料表（其餘皆以 `id` 為 key）：
+資料庫使用一個 `meta` store、六個實體資料表與兩個同步資料表（其餘皆以 `id` 為 key）：
 
 | Store | 用途 |
 | --- | --- |
@@ -21,6 +21,7 @@
 | `teams` | 學校田徑隊及未來可擴充的代表隊 |
 | `races` | 每一組百米賽的完成紀錄 |
 | `awards` | 班級完整賽程完成後產生的前三名獎牌 |
+| `windMeets` | 風速小子選拔賽的參賽名單、每輪對戰與歷屆冠軍 |
 | `outbox` | 與本機變更一起保存的待同步動作；雲端確認後移除 |
 | `cloudCache` | 排名等按需查詢的快照及更新時間 |
 
@@ -28,7 +29,7 @@
 
 ## 完整匯出 JSON
 
-匯出檔案將 `meta` 與原有五個實體 stores 合併成一個 JSON 物件；`outbox`、`cloudCache` 不匯出。這是本機目前快照，不代表所有尚未瀏覽學校的動態資料都已重新讀取。結構如下：
+匯出檔案將 `meta` 與六個實體 stores 合併成一個 JSON 物件；`outbox`、`cloudCache` 不匯出。這是本機目前快照，不代表所有尚未瀏覽學校的動態資料都已重新讀取。結構如下：
 
 ```js
 {
@@ -51,7 +52,9 @@
   students: [],
   teams: [],
   races: [],
-  awards: []
+  awards: [],
+  windMeets: [],
+  windChampions: {}
 }
 ```
 
@@ -88,6 +91,7 @@ erDiagram
 | `favoriteSchoolIds` | `string[]` | 收藏學校 ID，可供校內比賽快速選擇。 |
 | `followedTeamIds` | `string[]` | 顯示於「我的隊伍」的隊伍 ID。 |
 | `settings.muted` | `boolean` | 背景音樂是否靜音。 |
+| `windChampions` | `object` | 學校 ID → 年級 → 現任風速小子稱號與決賽成績。 |
 
 ## 學校與班級
 
@@ -330,3 +334,40 @@ erDiagram
 ## 本機與雲端的對應
 
 本機維持目前的 `schools`、`students`、`teams`、`races`、`awards` 物件，雲端拆為固定 `static`、動態 `dynamic` 與四種 `rankings` 索引，仍使用相同 ID 關聯。收藏、關注以 UID 隔離；音樂靜音設定仍屬於各瀏覽器的本機設定。完整對應見 [雲端同步說明](cloud-sync.md)。
+
+## 風速小子選拔賽與稱號
+
+IndexedDB object store 版本 3 新增 `windMeets`，原有資料表及世界 `schemaVersion: 3` 保留。升級只新增空資料表，不重新生成或下載固定學生資料。
+
+`world.windMeets` 是各屆選拔賽，`id` 同時是該屆的 `sessionId`：
+
+```js
+{
+  id: 'meet-uuid', schoolId: 'school-id', schoolName: '示例國中',
+  status: 'running', // 完賽為 complete
+  startedAt: '2026-10-14T01:00:00.000Z', finishedAt: null,
+  paused: false, completedMatches: 0, totalMatches: 27,
+  grades: [{
+    grade: 1,
+    entrants: [{ classId: 'class-id', className: '一年級 1 班', classNumber: 1,
+      studentIds: ['student-a', 'student-b', 'student-c'] }],
+    rounds: [{ number: 1, matches: [{
+      id: 'meet-uuid-g1-r1-m1', grade: 1, round: 1, number: 1,
+      classIds: ['class-a', 'class-b'], classNames: ['一年級 1 班', '一年級 2 班'],
+      studentIds: ['a1', 'a2', 'a3', 'b1', 'b2', 'b3'],
+      status: 'pending', // done 完賽；bye 輪空
+      winnerClassId: null, winnerStudentId: null, winnerName: null,
+      winnerTime: null, raceId: null
+    }] }],
+    champion: null
+  }]
+}
+```
+
+每班前三名按「有效個人最佳，否則預估百米」排序，在本屆開賽時固定。每輪配對兩班，每場最多六人；第一名所屬班級晉級，單數班級輪空。百分之一秒相同時採跑道次序決勝；各年級獨立產生冠軍。
+
+正式比賽紀錄 `races` 的 `mode` 為 `wind-selection`，帶有 `classIds`、`windMatchId`、`grade`、`round`，`classId` 為 `null`；結果快照仍含每位學生自己的 `classId`、班級名稱、學號、秒數與日期。選班後的前三名練習為 `wind-practice`，最多八人一組，不產生稱號或班級獎牌，仍更新個人最佳。
+
+`world.windChampions` 存在 meta，索引為 `{ [schoolId]: { [grade]: champion } }`，champion 包含 `studentId`、`name`、`classId`、`className`、`grade`、`time`、`awardedAt`、`meetId`。每校每年級一位現任風速小子，新一屆該年級決賽完成時取代；舊冠軍仍保存在原屆 `grades[].champion`。學生資料本身不另外複製 boolean，畫面以此索引顯示稱號。
+
+每場比賽、個人最佳、對戰樹及決賽稱號於同一 IndexedDB transaction 保存。全部內容納入 JSON 匯出與雲端待同步。重整後找出本機尚在 `running` 的選拔賽，從最後保存的下一場對戰恢復；為方便確認進度，預設先暫停，按「繼續」即可起跑。被中斷而尚未完賽的一場會重新起跑。
