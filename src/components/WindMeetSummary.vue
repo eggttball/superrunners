@@ -6,7 +6,7 @@ import Icon from './Icon.vue'
 const props = defineProps({ meet: Object })
 defineEmits(['back'])
 const gradeLabel = grade => ['一年級', '二年級', '三年級'][grade - 1]
-const NODE_HEIGHT = 70
+const NODE_HEIGHT = 84
 const ROW_GAP = 124
 const TOP = 84
 const GUTTER = 84
@@ -17,7 +17,7 @@ function buildTree(group) {
   const counts = [firstCount]
   while (counts.at(-1) > 1) counts.push(Math.ceil(counts.at(-1) / 2))
   const width = Math.max(320, GUTTER + firstCount * SLOT_WIDTH + 20)
-  const height = TOP + (counts.length - 1) * ROW_GAP + NODE_HEIGHT / 2 + 22
+  const height = TOP + (counts.length - 1) * ROW_GAP + NODE_HEIGHT / 2 + 54
   const rows = []
   const nodes = []
   const links = []
@@ -42,6 +42,11 @@ function buildTree(group) {
         studentId: match?.winnerStudentId,
         name: match?.winnerName,
         time: match?.winnerTime,
+        className: match?.classNames?.[match.classIds.indexOf(match.winnerClassId)] || '',
+        classPair: roundIndex === 0 ? (match?.classNames || []).map((className, classIndex) => ({
+          name: className,
+          color: getClass(match.classIds[classIndex])?.color || '#c7cfc1',
+        })) : [],
         style: {
           left: `${x / width * 100}%`, top: `${y}px`,
           '--class-color': getClass(match?.winnerClassId)?.color || '#c7cfc1',
@@ -93,16 +98,22 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
           </svg>
           <span class="wind-tree-crown" :style="group.tree.rootStyle"><Icon name="trophy" :size="19" />{{ group.champion ? '風速小子' : '冠軍' }}</span>
           <span v-for="row in group.tree.rows" :key="row.number" class="wind-tree-round-label" :style="{ top: `${row.y}px` }">{{ row.label }}</span>
-          <button
-            v-for="node in group.tree.nodes" :key="node.id"
-            class="wind-tree-node" :class="{ champion: node.champion, bye: node.status === 'bye', pending: node.status === 'pending' }"
-            :style="node.style" :disabled="!node.studentId"
-            :title="node.description" :aria-label="`${node.description} · ${node.name || (node.status === 'bye' ? '輪空' : '等待比賽')}${node.time != null ? ' · ' + timeText(node.time) + ' 秒' : ''}`"
-            @click="game.studentId = node.studentId"
-          >
-            <strong>{{ node.name || (node.status === 'bye' ? '輪空' : '等待比賽') }}</strong>
-            <b class="mono">{{ node.time != null ? timeText(node.time) + 's' : '—' }}</b>
-          </button>
+          <template v-for="node in group.tree.nodes" :key="node.id">
+            <button
+              class="wind-tree-node" :class="{ champion: node.champion, bye: node.status === 'bye', pending: node.status === 'pending' }"
+              :style="node.style" :disabled="!node.studentId"
+              :title="node.description" :aria-label="`${node.description} · ${node.name || (node.status === 'bye' ? '輪空' : '等待比賽')}${node.className ? ' · ' + node.className : ''}${node.time != null ? ' · ' + timeText(node.time) + ' 秒' : ''}`"
+              @click="game.studentId = node.studentId"
+            >
+              <strong>{{ node.name || (node.status === 'bye' ? '輪空' : '等待比賽') }}</strong>
+              <small v-if="node.className">{{ node.className }}</small>
+              <b class="mono">{{ node.time != null ? timeText(node.time) + 's' : '—' }}</b>
+            </button>
+            <div v-if="node.classPair.length" class="wind-tree-class-pair" :style="{ left: node.style.left, top: `${node.y + 53}px` }" :aria-label="node.classPair.map(team => team.name).join(' 對 ')">
+              <span v-for="(team, index) in node.classPair" :key="`${node.id}-${index}`" :style="{ '--class-color': team.color }">{{ team.name }}</span>
+              <span v-if="node.classPair.length === 1" class="wind-tree-bye-label">輪空</span>
+            </div>
+          </template>
         </div>
       </div>
     </section>
