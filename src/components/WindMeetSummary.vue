@@ -9,9 +9,9 @@ const props = defineProps({
 })
 defineEmits(['back'])
 const gradeLabel = grade => ['一年級', '二年級', '三年級'][grade - 1]
-const NODE_HEIGHT = 106
+const NODE_HEIGHT = 116
 const LEAF_HEIGHT = 92
-const ROW_GAP = 142
+const ROW_GAP = 152
 const TOP = 100
 const GUTTER = 84
 const SLOT_WIDTH = 160
@@ -141,13 +141,13 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
             v-for="node in group.tree.nodes" :key="node.id"
             class="wind-tree-node" :class="{ champion: node.champion, bye: node.status === 'bye', pending: node.status === 'pending' }"
               :style="node.style" :disabled="node.status === 'bye' || !node.firstPlace?.studentId"
-            :title="node.description" :aria-label="`${node.description} · ${node.topThree.map(result => `${result.className} ${result.name}`).join('，')}${node.firstPlace?.time != null ? ' · 第一名 ' + timeText(node.firstPlace.time) + ' 秒' : ''}`"
+            :title="node.description" :aria-label="`${node.description} · ${node.topThree.map((result, index) => `${index + 1}名 ${result.className} ${result.name}${result.time != null ? ' ' + timeText(result.time) + ' 秒' : ''}`).join('，')}`"
             @click="game.studentId = node.firstPlace.studentId"
             >
             <span v-if="node.status === 'bye'" class="wind-tree-bye-label">輪空晉級</span>
             <span v-else v-for="(result, index) in node.topThree" :key="result.studentId" class="wind-tree-place" :class="{ first: index === 0 }">
               <i>{{ index + 1 }}</i><span class="wind-tree-place-name"><small>{{ result.className }}</small><strong>{{ result.name }}</strong></span>
-              <b v-if="index === 0 && result.time != null" class="mono">{{ timeText(result.time) }}s</b>
+              <b v-if="result.time != null" class="mono">{{ timeText(result.time) }}s</b>
             </span>
             <span v-if="!node.topThree.length" class="wind-tree-pending-label">等待比賽</span>
           </button>
