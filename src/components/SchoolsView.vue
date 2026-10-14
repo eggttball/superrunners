@@ -1,6 +1,6 @@
 <script setup vapor>
 import { computed, ref, watch } from 'vue'
-import { game, getSchool, getClass, getStudent, getTeam, toggleFavorite, toggleFollow, timeText, studentTime, go } from '../lib/game.js'
+import { game, getSchool, getClass, getStudent, getTeam, getSchoolTeamCountForClass, toggleFavorite, toggleFollow, timeText, studentTime, go } from '../lib/game.js'
 import SchoolPicker from './SchoolPicker.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
@@ -28,6 +28,10 @@ const team = computed(() => { game.revision; const value = school.value && getTe
 const isFavorite = computed(() => { game.revision; return game.world.favoriteSchoolIds.includes(game.schoolId) })
 const isFollowed = computed(() => { game.revision; return team.value ? game.world.followedTeamIds.includes(team.value.id) : false })
 const classes = computed(() => school.value?.classes.filter(cls => cls.grade === grade.value) || [])
+const schoolTeamClassIds = computed(() => {
+  game.revision
+  return new Set((school.value?.classes || []).filter(cls => getSchoolTeamCountForClass(cls.id) >= 5).map(cls => cls.id))
+})
 const selectedClass = computed(() => getClass(classId.value))
 const studentCount = computed(() => school.value?.classes.reduce((sum, cls) => sum + cls.studentIds.length, 0) || 0)
 const rankedStudents = computed(() => {
@@ -105,7 +109,7 @@ watch([() => game.schoolId, grade, classId, scope, teamOnly, nationalRanking, ()
         <div class="stat-grid school-stat-grid"><div class="stat-card"><strong>3</strong><span>年級</span></div><div class="stat-card"><strong>{{ school.classes.length }}</strong><span>班級</span></div><div class="stat-card"><strong>{{ studentCount.toLocaleString() }}</strong><span>學生</span></div><div class="stat-card"><strong>{{ team?.memberIds.length || 0 }}</strong><span>田徑隊員</span></div></div></template>
         <div class="section-title"><h3>{{ nationalRanking ? '全國百米排名' : '發掘跑道上的潛力' }}</h3><span class="muted">{{ nationalRanking ? '全國學生' : '學生名冊' }}</span></div>
         <div v-if="!teamOnly && !nationalRanking" class="grade-picker" aria-label="選擇年級"><button v-for="year in 3" :key="year" type="button" :class="{ active: grade === year }" :aria-pressed="grade === year" @click="grade = year">{{ gradeLabels[year - 1] }}<span>{{ school.classes.filter(cls => cls.grade === year).length }} 班</span></button></div>
-        <div v-if="!teamOnly && !nationalRanking" class="class-picker" aria-label="選擇班級"><button v-for="cls in classes" :key="cls.id" class="chip" :class="{ active: classId === cls.id }" :aria-pressed="classId === cls.id" @click="classId = cls.id; scope = 'class'"><i class="class-color" :style="{ background: cls.color }"></i>{{ cls.name }}<small>{{ cls.studentIds.length }} 人</small></button></div>
+        <div v-if="!teamOnly && !nationalRanking" class="class-picker" aria-label="選擇班級"><button v-for="cls in classes" :key="cls.id" class="chip" :class="{ active: classId === cls.id, 'has-school-team': schoolTeamClassIds.has(cls.id) }" :title="schoolTeamClassIds.has(cls.id) ? '田徑隊班' : undefined" :aria-label="`${cls.name}，${cls.studentIds.length} 人${schoolTeamClassIds.has(cls.id) ? '，田徑隊班' : ''}`" :aria-pressed="classId === cls.id" @click="classId = cls.id; scope = 'class'"><i class="class-color" :style="{ background: cls.color }"></i>{{ cls.name }}<small>{{ cls.studentIds.length }} 人</small></button></div>
         <div class="roster-toolbar"><div><strong>{{ tableLabel }}</strong><span class="muted">{{ rosterCount }} 位</span></div><label v-if="!teamOnly && !nationalRanking">能力排名範圍<select v-model="scope"><option value="class">班級排名</option><option value="grade">年級排名</option><option value="school">全校排名</option></select></label></div>
         <p class="ranking-note">{{ nationalRanking ? '顯示全國百米成績前 300 名。' : teamOnly ? '依田徑隊內百米成績排序。' : '依百米個人最佳排序；尚未參賽的學生以預估 100m 成績排名。' }} 點選姓名查看完整能力。</p>
         <p class="cloud-read-status" role="status"><template v-if="cloudLoading">正在取得雲端最新資料…</template><template v-else-if="cloudError">{{ cloudError }} <button class="text-button" @click="refreshRoster">重試</button></template><template v-else-if="cloudUpdatedAt">雲端更新於 {{ cloudUpdatedAt }}</template></p>

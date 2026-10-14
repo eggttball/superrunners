@@ -224,6 +224,11 @@ export const getStudent = id => students.get(id)
 export const getSchool = id => schools.get(id)
 export const getClass = id => classes.get(id)
 export const getTeam = id => teams.get(id)
+export function getSchoolTeamCountForClass(classId) {
+  const cls = getClass(classId)
+  if (!cls) return 0
+  return cls.studentIds.reduce((count, studentId) => count + (getStudent(studentId)?.isSchoolTeam ? 1 : 0), 0)
+}
 export const timeText = time => Number.isFinite(time) ? time.toFixed(2) : '—'
 export const dateText = value => new Date(value).toLocaleString('zh-TW', { hour12: false })
 export const studentTime = student => Number.isFinite(student.best100) && student.best100 > 0 ? student.best100 : student.baseline100

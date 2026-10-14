@@ -106,6 +106,8 @@
 .interior-shell .chip, .interior-shell .class-picker .chip { background: #fffdf6; color: #435c70; border: 1px solid #8ca5ab; min-height: 36px; border-radius: 4px; }
 .interior-shell .chip:hover { background: #e8efde; }
 .interior-shell .class-picker .chip.active { background: #bce6dc; color: #244d53; border-color: #396b68; box-shadow: 0 2px 0 #396b68; }
+.interior-shell .class-picker .chip.has-school-team,
+.interior-shell .class-picker .chip.has-school-team.active { border-color: #c96d38; box-shadow: inset 0 0 0 1px #c96d38, 0 2px 0 #8e4c32; }
 .interior-shell .class-picker small { color: #536e78; }
 .interior-shell .class-color { border: 1px solid #263c5955; }
 .interior-shell .roster-toolbar label { color: var(--muted); }
@@ -188,6 +190,10 @@
 .interior-shell .class-card strong { font-weight: 700; }
 .interior-shell .class-card:hover { border-color: #6e8576; transform: translateY(-2px); }
 .interior-shell .class-card.selected { border-color: #435c65; color: var(--ink); background: #fff0b8; box-shadow: 0 3px 0 #435c65; }
+.interior-shell .class-card.has-school-team { border-color: #c96d38; }
+.interior-shell .class-card.has-school-team.selected { border-color: #c96d38; box-shadow: 0 3px 0 #8e4c32; }
+.interior-shell .class-card-name { display: inline-flex; align-items: center; gap: 6px; }
+.interior-shell .school-team-class-icon { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 2px; vertical-align: middle; }
 .interior-shell .class-kit { width: 28px; height: 18px; border-radius: 1px; clip-path: polygon(25% 0, 38% 8%, 62% 8%, 75% 0, 100% 25%, 83% 48%, 75% 39%, 75% 100%, 25% 100%, 25% 39%, 17% 48%, 0 25%); }
 .interior-shell .checkbox-visual { border: 1px solid #889d9b; background: #fffdf5; }
 .interior-shell .class-card.selected .checkbox-visual { background: #3f6d5f; color: #fff9e8; border-color: #3f6d5f; }

@@ -1,6 +1,6 @@
 <script setup vapor>
 import { computed, ref, onUnmounted, watch } from 'vue'
-import { autoMeet, game, go, getSchool, getClass, getTeam, getStudent, recordHeat, timeText, dateText, notify, dismissAutomaticMeetResult, retryAutomaticMeetSave, setAutomaticMeetSpeed, startAutomaticMeet, startNationalAutomaticMeet, terminateNationalAutomaticMeet, toggleAutomaticMeetPause } from '../lib/game.js'
+import { autoMeet, game, go, getSchool, getClass, getTeam, getStudent, getSchoolTeamCountForClass, recordHeat, timeText, dateText, notify, dismissAutomaticMeetResult, retryAutomaticMeetSave, setAutomaticMeetSpeed, startAutomaticMeet, startNationalAutomaticMeet, terminateNationalAutomaticMeet, toggleAutomaticMeetPause } from '../lib/game.js'
 import { createSprintProfile, distanceAt, speedAt } from '../lib/physics.js'
 import { setMusicMode, playCountdown, playStartWhistle } from '../lib/audio.js'
 import SchoolPicker from './SchoolPicker.vue'
@@ -49,6 +49,10 @@ const raceSpeed = computed(() => automatic.value ? autoMeet.speed : speed.value)
 const displayedSessionId = computed(() => automatic.value ? autoMeet.sessionId : sessionId.value)
 const school = computed(() => getSchool(displayedSchoolId.value))
 const classes = computed(() => school.value?.classes.filter(cls => cls.grade === Number(grade.value)) || [])
+const schoolTeamClassIds = computed(() => {
+  game.revision
+  return new Set((school.value?.classes || []).filter(cls => getSchoolTeamCountForClass(cls.id) >= 5).map(cls => cls.id))
+})
 const totalStudents = computed(() => selectedClasses.value.reduce((count, id) => count + getClass(id).studentIds.length, 0))
 const current = computed(() => raceQueue.value[raceHeatIndex.value])
 const teamRace = computed(() => Boolean(current.value?.teamId || game.raceTeamId))
@@ -320,8 +324,8 @@ onUnmounted(() => { cancelAnimationFrame(frame); game.raceTitle = ''; if (!autom
           <template v-if="school">
             <div class="split-heading"><div><span class="eyebrow">01 / 選擇參賽班級</span><h2>{{ school.name }}</h2><p class="muted">{{ school.city }} · 可跨年級選擇，最多 8 班</p></div><span class="selection-counter"><b>{{ selectedClasses.length }}</b> / 8</span></div>
             <div class="tabs"><button v-for="year in 3" :key="year" :class="{ active: grade === year }" @click="grade = year">{{ gradeLabels[year - 1] }} <span>{{ school.classes.filter(c => c.grade === year).length }} 班</span></button></div>
-            <div class="class-grid"><button v-for="cls in classes" :key="cls.id" class="class-card" :class="{ selected: selectedClasses.includes(cls.id) }" @click="selectClass(cls.id)"><span class="class-kit" :style="{ background: cls.color }"></span><span class="checkbox-visual"><Icon v-if="selectedClasses.includes(cls.id)" name="check" :size="14" /></span><strong>{{ cls.name }}</strong><small>{{ cls.studentIds.length }} 位學生</small></button></div>
-            <div class="selected-classes"><span class="muted">已選班級</span><span v-if="!selectedClasses.length" class="muted">尚未選擇</span><button v-for="id in selectedClasses" :key="id" class="chip" @click="selectClass(id)">{{ getClass(id).name }}<Icon name="close" :size="13" /></button></div>
+            <div class="class-grid"><button v-for="cls in classes" :key="cls.id" class="class-card" :class="{ selected: selectedClasses.includes(cls.id), 'has-school-team': schoolTeamClassIds.has(cls.id) }" :title="schoolTeamClassIds.has(cls.id) ? '田徑隊班' : undefined" :aria-label="`${cls.name}，${cls.studentIds.length} 位學生${schoolTeamClassIds.has(cls.id) ? '，田徑隊班' : ''}`" @click="selectClass(cls.id)"><span class="class-kit" :style="{ background: cls.color }"></span><span class="checkbox-visual"><Icon v-if="selectedClasses.includes(cls.id)" name="check" :size="14" /></span><strong class="class-card-name">{{ cls.name }}<span v-if="schoolTeamClassIds.has(cls.id)" class="runner-identity-icon school-team-status school-team-class-icon" title="田徑隊班" aria-label="田徑隊班"><Icon name="sprint" :size="14" /></span></strong><small>{{ cls.studentIds.length }} 位學生</small></button></div>
+            <div class="selected-classes"><span class="muted">已選班級</span><span v-if="!selectedClasses.length" class="muted">尚未選擇</span><button v-for="id in selectedClasses" :key="id" class="chip" :title="schoolTeamClassIds.has(id) ? '田徑隊班' : undefined" :aria-label="`${getClass(id).name}${schoolTeamClassIds.has(id) ? '，田徑隊班' : ''}`" @click="selectClass(id)">{{ getClass(id).name }}<span v-if="schoolTeamClassIds.has(id)" class="runner-identity-icon school-team-status school-team-class-icon" title="田徑隊班" aria-label="田徑隊班"><Icon name="sprint" :size="13" /></span><Icon name="close" :size="13" /></button></div>
             <div class="event-selection"><span class="eyebrow">02 / 選擇比賽項目</span><div class="event-buttons"><button class="event-card sprint" :disabled="!selectedClasses.length" @click="enterRace"><Icon name="bolt" :size="28" /><div><strong>一百公尺</strong><small>選取班級比賽</small></div><Icon name="arrow" :size="24" /></button><button class="event-card automatic" @click="enterAutomaticMeet"><Icon name="flag" :size="28" /><div><strong>全校自動百米賽</strong><small>一年級至三年級</small></div><Icon name="play" :size="22" /></button><button class="event-card relay" disabled><Icon name="team" :size="28" /><div><strong>大隊接力</strong><small>下一階段開放</small></div><span class="badge">SOON</span></button></div></div>
             <div class="race-hint"><Icon name="clock" :size="19" /><p>全校自動賽會依一年級、二年級、三年級的班級順序持續進行。<br /><span>可切換到其他頁面；賽程仍會繼續，每組完賽自動存檔。</span></p></div>
           </template>
