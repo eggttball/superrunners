@@ -54,6 +54,12 @@ const racePhase = computed(() => windSelection.value ? windMeet.phase : automati
 const raceQueue = computed(() => automatic.value ? autoMeet.queue : queue.value)
 const raceHeatIndex = computed(() => windSelection.value ? windMeet.meet.completedMatches : automatic.value ? autoMeet.heatIndex : heatIndex.value)
 const raceAthletes = computed(() => windSelection.value ? windMeet.athletes : automatic.value ? autoMeet.athletes : athletes.value)
+// Cross-class races keep each student's own uniform, independent of the heat.
+// Both the track sprite and its card consume this same colour.
+const raceParticipants = computed(() => raceAthletes.value.map(athlete => ({
+  ...athlete,
+  classColor: getClass(athlete.student.classId)?.color || '#d5ee7e',
+})))
 const raceElapsed = computed(() => windSelection.value ? windMeet.elapsed : automatic.value ? autoMeet.elapsed : elapsed.value)
 const racePaused = computed(() => windSelection.value ? windMeet.paused : automatic.value ? autoMeet.paused : paused.value)
 const raceSpeed = computed(() => windSelection.value ? windMeet.speed : automatic.value ? autoMeet.speed : speed.value)
@@ -70,7 +76,6 @@ const teamRace = computed(() => !windSelection.value && Boolean(current.value?.t
 const currentClass = computed(() => current.value ? getClass(current.value.classId) : null)
 const currentTeam = computed(() => getTeam(current.value?.teamId || game.raceTeamId))
 const displayClassName = computed(() => windSelection.value ? `${windMeet.match.classNames.join(' vs. ')} · 第 ${windMeet.match.round} 輪` : windPractice.value ? '班級前三名練習' : currentClass.value?.name || (currentTeam.value ? `${currentTeam.value.name} 隊內賽` : ''))
-const displayClassColor = computed(() => currentClass.value?.color || '#d5ee7e')
 const currentRaceRecord = computed(() => {
   game.revision
   const raceId = windSelection.value ? windMeet.match?.id : automatic.value ? `${autoMeet.sessionId}-heat-${autoMeet.heatIndex + 1}` : currentHeatId.value
@@ -129,19 +134,19 @@ function hasNewPersonalBest(athlete) {
 
 const runners = computed(() => {
   const now = Math.max(0, raceElapsed.value)
-  return raceAthletes.value.map((athlete, index) => {
+  return raceParticipants.value.map((athlete, index) => {
     const fadeStart = athlete.profile.time + athlete.profile.runoutDuration * 0.68
     const opacity = now <= fadeStart ? 1 : Math.max(0, 1 - (now - fadeStart) / (athlete.profile.runoutDuration * 0.32))
     return {
       id: athlete.student.id, name: athlete.student.name, gender: athlete.student.gender,
       height: athlete.student.height, weight: athlete.student.weight,
-      lane: index + 1, color: getClass(athlete.student.classId)?.color || displayClassColor.value,
+      lane: index + 1, color: athlete.classColor,
       opacity,
       speed: speedAt(now, athlete.profile), distance: distanceAt(now, athlete.profile),
     }
   })
 })
-const results = computed(() => raceAthletes.value.map((athlete, index) => ({ ...athlete.student, lane: index + 1, time: athlete.profile.time, color: getClass(athlete.student.classId)?.color || displayClassColor.value })).sort((a, b) => a.time - b.time))
+const results = computed(() => raceParticipants.value.map((athlete, index) => ({ ...athlete.student, lane: index + 1, time: athlete.profile.time })).sort((a, b) => a.time - b.time))
 const records = computed(() => { game.revision; return game.world.races.filter(race => race.schoolId === displayedSchoolId.value).sort((a, b) => b.finishedAt.localeCompare(a.finishedAt)) })
 const sessionRecords = computed(() => { game.revision; return game.world.races.filter(race => race.sessionId === displayedSessionId.value) })
 const sessionResults = computed(() => sessionRecords.value.flatMap(race => race.results).sort((a, b) => a.time - b.time))
@@ -410,10 +415,10 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
       <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><div class="race-topline-controls"><button v-if="racePhase === 'heatdone'" class="btn small primary next-heat-button" @click="nextHeat">{{ raceHeatIndex + 1 === raceQueue.length ? '查看總結' : '下一組' }}<Icon name="arrow" :size="16" /></button><button v-if="racePhase === 'saveerror'" class="btn small primary" @click="retryDisplayedSave">重試保存</button><button v-if="racePhase === 'running' || racePhase === 'countdown' || ((automatic || windSelection) && racePhase === 'saving')" class="btn small" @click="toggleDisplayedPause"><Icon :name="racePaused ? 'play' : 'pause'" :size="16" />{{ racePaused ? '繼續' : '暫停' }}</button><button v-if="nationalAutomatic && autoMeet.active" class="btn small terminate-national-meet" @click="confirmTerminateNationalMeet"><Icon name="close" :size="15" />終止全國賽</button><button v-for="rate in [1, 2, 4, 8, 16]" :key="rate" class="speed-button" :class="{ active: raceSpeed === rate }" @click="setDisplayedSpeed(rate)">{{ rate }}×</button></div></div><Track :runners="runners" :animated="racePhase === 'running' && !racePaused" :paused="racePhase === 'running' && racePaused" race-mode /><div v-if="racePhase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="racePhase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="racePaused" class="pause-overlay">PAUSED<span>比賽已暫停</span></div></div>
       <p v-if="racePhase === 'saveerror'" class="data-note" role="alert">{{ windSelection ? windMeet.error : automatic ? autoMeet.error : saveError }}</p>
       <p v-if="windSelection && windMeet.error && racePhase !== 'saveerror'" class="data-note" role="alert">{{ windMeet.error }}</p><div class="lane-cards">
-        <button v-for="(athlete, index) in raceAthletes" :key="athlete.student.id" class="lane-card" :class="{ 'new-personal-best': hasNewPersonalBest(athlete) }" @click="game.studentId = athlete.student.id" :style="{ '--runner-color': getClass(athlete.student.classId)?.color || displayClassColor }">
+        <button v-for="(athlete, index) in raceParticipants" :key="athlete.student.id" class="lane-card" :class="{ 'new-personal-best': hasNewPersonalBest(athlete) }" @click="game.studentId = athlete.student.id" :style="{ '--runner-color': athlete.classColor }">
           <span class="lane-label">LANE <b>{{ index + 1 }}</b></span>
           <span class="runner-card-portrait">
-            <PixelRunner :seed="athlete.student.id" :gender="athlete.student.gender" :height="athlete.student.height" :weight="athlete.student.weight" :speed="speedAt(Math.max(0, raceElapsed), athlete.profile)" :color="getClass(athlete.student.classId)?.color || displayClassColor" :size="47" :running="racePhase === 'running' && !racePaused && speedAt(Math.max(0, raceElapsed), athlete.profile) > 0" />
+            <PixelRunner :seed="athlete.student.id" :gender="athlete.student.gender" :height="athlete.student.height" :weight="athlete.student.weight" :speed="speedAt(Math.max(0, raceElapsed), athlete.profile)" :color="athlete.classColor" :size="47" :running="racePhase === 'running' && !racePaused && speedAt(Math.max(0, raceElapsed), athlete.profile) > 0" />
           </span>
           <span v-if="hasNewPersonalBest(athlete)" class="personal-best-badge" :title="athlete.student.best100 == null ? '建立第一筆正式百米最佳' : '刷新個人百米最佳'"><Icon name="trophy" :size="12" />{{ athlete.student.best100 == null ? '首筆 PB' : '新 PB!' }}</span>
           <strong class="lane-card-name"><WindTitleBadge :student-id="athlete.student.id" compact /><span v-if="athlete.student.isSchoolTeam" class="runner-identity-icon school-team-status" title="田徑隊" aria-label="田徑隊"><Icon name="sprint" :size="14" /></span><span v-else-if="athlete.student.isCityTeam" class="runner-identity-icon city-team-status" title="縣市代表隊" aria-label="縣市代表隊"><Icon name="flag" :size="14" /></span><span v-else-if="athlete.student.isNationalTeam" class="runner-identity-icon national-team-status" title="國家代表隊" aria-label="國家代表隊"><Icon name="globe" :size="14" /></span><span class="gender-icon" :class="athlete.student.gender === '男' ? 'gender-male' : 'gender-female'" :title="athlete.student.gender" :aria-label="athlete.student.gender"><Icon :name="athlete.student.gender === '男' ? 'male' : 'female'" :size="13" /></span>{{ athlete.student.name }}</strong>

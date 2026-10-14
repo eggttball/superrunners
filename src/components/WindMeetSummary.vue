@@ -1,31 +1,110 @@
 <script setup vapor>
 import { computed } from 'vue'
-import { game, getStudent, getClass, timeText, dateText } from '../lib/game.js'
-import PixelRunner from './PixelRunner.vue'
+import { game, getClass, timeText, dateText } from '../lib/game.js'
 import Icon from './Icon.vue'
+
 const props = defineProps({ meet: Object })
 defineEmits(['back'])
-const grades = computed(() => props.meet.grades.filter(group => group.entrants.length))
 const gradeLabel = grade => ['一年級', '二年級', '三年級'][grade - 1]
-function roundLabel(group, index) {
-  if (group.champion && index === group.rounds.length - 1) return '冠軍賽'
-  return `第 ${index + 1} 輪`
+const NODE_HEIGHT = 70
+const ROW_GAP = 124
+const TOP = 84
+const GUTTER = 84
+const SLOT_WIDTH = 156
+
+function buildTree(group) {
+  const firstCount = group.rounds[0]?.matches.length || 1
+  const counts = [firstCount]
+  while (counts.at(-1) > 1) counts.push(Math.ceil(counts.at(-1) / 2))
+  const width = Math.max(320, GUTTER + firstCount * SLOT_WIDTH + 20)
+  const height = TOP + (counts.length - 1) * ROW_GAP + NODE_HEIGHT / 2 + 22
+  const rows = []
+  const nodes = []
+  const links = []
+  let previous = []
+
+  counts.forEach((count, roundIndex) => {
+    const savedRound = group.rounds[roundIndex]
+    const y = TOP + (counts.length - roundIndex - 1) * ROW_GAP
+    const rowNodes = []
+    for (let index = 0; index < count; index++) {
+      const match = savedRound?.matches[index]
+      const children = previous.slice(index * 2, index * 2 + 2)
+      // Parents sit over their descendant span, including uneven bye branches.
+      const left = children[0]?.left ?? GUTTER + (index + 0.5) * (width - GUTTER - 20) / firstCount
+      const right = children.at(-1)?.right ?? left
+      const x = (left + right) / 2
+      const champion = Boolean(group.champion && roundIndex === counts.length - 1)
+      const node = {
+        id: match?.id || `${group.grade}-${roundIndex}-${index}`,
+        match, x, y, left, right, champion,
+        status: match?.status || 'pending',
+        studentId: match?.winnerStudentId,
+        name: match?.winnerName,
+        time: match?.winnerTime,
+        style: {
+          left: `${x / width * 100}%`, top: `${y}px`,
+          '--class-color': getClass(match?.winnerClassId)?.color || '#c7cfc1',
+        },
+        description: `${gradeLabel(group.grade)} · 第 ${roundIndex + 1} 輪${match?.classNames.length ? ' · ' + match.classNames.join(' 對 ') : ''}`,
+      }
+      const jointY = children.length ? (children[0].y + y) / 2 : y
+      for (const child of children) {
+        links.push({
+          id: `${child.id}-${node.id}`,
+          path: `M ${child.x} ${child.y - NODE_HEIGHT / 2} V ${jointY} H ${x}`,
+          advanced: Boolean(match?.winnerClassId && match.winnerClassId === child.match?.winnerClassId),
+        })
+      }
+      if (children.length) links.push({
+        id: `${node.id}-stem`,
+        path: `M ${x} ${jointY} V ${y + NODE_HEIGHT / 2}`,
+        advanced: Boolean(match?.winnerClassId),
+      })
+      rowNodes.push(node)
+      nodes.push(node)
+    }
+    rows.push({ number: roundIndex + 1, label: roundIndex === counts.length - 1 ? '冠軍賽' : `第 ${roundIndex + 1} 輪`, y })
+    previous = rowNodes
+  })
+  return {
+    width, height, rows, nodes, links,
+    rootStyle: { left: `${previous[0].x / width * 100}%` },
+    style: { minWidth: `${width}px`, height: `${height}px` },
+  }
 }
+
+const grades = computed(() => props.meet.grades.filter(group => group.entrants.length)
+  .map(group => ({ ...group, tree: buildTree(group) })))
 </script>
 
 <template>
   <div class="wind-summary">
-    <div class="panel wind-summary-header"><div><span class="eyebrow">WIND RUNNERS</span><h1>風速小子選拔賽</h1><p>{{ meet.schoolName }} · {{ dateText(meet.startedAt) }}</p><span class="muted">{{ meet.completedMatches }} / {{ meet.totalMatches }} 場對戰 · {{ meet.status === 'complete' ? '選拔完成' : '選拔進行中' }}</span></div><button class="btn primary" @click="$emit('back')"><Icon name="back" :size="17" />回比賽選單</button></div>
+    <div class="panel wind-summary-header">
+      <div><span class="eyebrow">WIND RUNNERS</span><h1>風速小子選拔賽</h1><p>{{ meet.schoolName }} · {{ dateText(meet.startedAt) }}</p><span class="muted">{{ meet.completedMatches }} / {{ meet.totalMatches }} 場對戰 · {{ meet.status === 'complete' ? '選拔完成' : '選拔進行中' }}</span></div>
+      <button class="btn primary" @click="$emit('back')"><Icon name="back" :size="17" />回比賽選單</button>
+    </div>
     <section v-for="group in grades" :key="group.grade" class="panel wind-grade-summary">
       <div class="section-title"><h2>{{ gradeLabel(group.grade) }}</h2><span class="muted">{{ group.entrants.length }} 個班級</span></div>
-      <button v-if="group.champion" class="wind-champion-card" @click="game.studentId = group.champion.studentId">
-        <PixelRunner :seed="group.champion.studentId" :gender="getStudent(group.champion.studentId)?.gender" :height="getStudent(group.champion.studentId)?.height" :weight="getStudent(group.champion.studentId)?.weight" :color="getClass(group.champion.classId)?.color || '#ffbf65'" :size="70" />
-        <span><span class="wind-title-badge"><Icon name="sprint" :size="17" />風速小子</span><strong>{{ group.champion.name }}</strong><small>{{ group.champion.className }} · 冠軍班級</small></span><b class="mono">{{ timeText(group.champion.time) }}<small>s</small></b>
-      </button>
-      <div class="wind-rounds"><div v-for="(round, index) in group.rounds" :key="round.number" class="wind-round"><h3>{{ roundLabel(group, index) }}</h3><div class="wind-match-grid"><article v-for="match in round.matches" :key="match.id" class="wind-match-card" :class="{ bye: match.status === 'bye', final: group.champion && index === group.rounds.length - 1 }">
-        <div class="wind-match-pair"><span v-for="(id, classIndex) in match.classIds" :key="id" :class="{ winner: id === match.winnerClassId }"><i :style="{ background: getClass(id)?.color }"></i>{{ match.classNames[classIndex] }}<Icon v-if="id === match.winnerClassId" name="check" :size="15" /><small v-if="classIndex === 0 && match.classIds.length === 2">VS</small></span></div>
-        <p v-if="match.status === 'bye'">輪空晉級</p><p v-else-if="match.status === 'pending'" class="muted">等待比賽</p><div v-else class="wind-match-result"><span>{{ match.classNames[match.classIds.indexOf(match.winnerClassId)] }} 出線</span><button class="text-button" @click="game.studentId = match.winnerStudentId">第一名 {{ match.winnerName }} <b class="mono">{{ timeText(match.winnerTime) }}s</b></button></div>
-      </article></div></div></div>
+      <div class="wind-tree-viewport" tabindex="0" role="region" :aria-label="`${gradeLabel(group.grade)}淘汰樹，第一輪在下方，冠軍在上方`">
+        <div class="wind-tree" :style="group.tree.style">
+          <svg class="wind-tree-links" :viewBox="`0 0 ${group.tree.width} ${group.tree.height}`" preserveAspectRatio="none" aria-hidden="true">
+            <path v-for="link in group.tree.links" :key="link.id" :d="link.path" :class="{ advanced: link.advanced }" />
+          </svg>
+          <span class="wind-tree-crown" :style="group.tree.rootStyle"><Icon name="trophy" :size="19" />{{ group.champion ? '風速小子' : '冠軍' }}</span>
+          <span v-for="row in group.tree.rows" :key="row.number" class="wind-tree-round-label" :style="{ top: `${row.y}px` }">{{ row.label }}</span>
+          <button
+            v-for="node in group.tree.nodes" :key="node.id"
+            class="wind-tree-node" :class="{ champion: node.champion, bye: node.status === 'bye', pending: node.status === 'pending' }"
+            :style="node.style" :disabled="!node.studentId"
+            :title="node.description" :aria-label="`${node.description} · ${node.name || (node.status === 'bye' ? '輪空' : '等待比賽')}${node.time != null ? ' · ' + timeText(node.time) + ' 秒' : ''}`"
+            @click="game.studentId = node.studentId"
+          >
+            <strong>{{ node.name || (node.status === 'bye' ? '輪空' : '等待比賽') }}</strong>
+            <b class="mono">{{ node.time != null ? timeText(node.time) + 's' : '—' }}</b>
+          </button>
+        </div>
+      </div>
     </section>
   </div>
 </template>
