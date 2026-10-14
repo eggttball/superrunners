@@ -4,7 +4,7 @@ import { createMeetClock } from './meet-clock.js'
 import { createSprintProfile } from './physics.js'
 import { setMusicMode, playCountdown, playStartWhistle } from './audio.js'
 
-export const windMeet = shallowReactive({ active: false, meet: null, match: null, athletes: [],
+export const windMeet = shallowReactive({ active: false, meet: null, match: null, athletes: [], friendly: false, friendshipResults: [],
   phase: 'idle', elapsed: 0, paused: false, speed: 1, error: '', startedAt: '', finishedAt: '' })
 let dependencies, advancing = false, endedAt = 0, cue = 3
 const clock = createMeetClock(() => { void advance() })
@@ -15,18 +15,51 @@ const runoutEnd = () => Math.max(0, ...windMeet.athletes.map(athlete => athlete.
 
 function prepare(at) {
   const match = nextWindMatch(windMeet.meet)
-  if (!match) return
+  if (!match) return false
   Object.assign(windMeet, { match, athletes: match.studentIds.map(id => {
     const student = dependencies.getStudent(id)
     return { student: { ...student }, profile: createSprintProfile(student) }
-  }), elapsed: -3, phase: 'countdown', startedAt: new Date(at).toISOString(), finishedAt: '', error: '' })
+  }), friendly: false, elapsed: -3, phase: 'countdown', startedAt: new Date(at).toISOString(), finishedAt: '', error: '' })
   cue = 3
   if (!windMeet.paused && recentCue(at)) playCountdown(3)
+  return true
+}
+
+function prepareFriendship(at) {
+  const champions = windMeet.meet.grades.map(group => group.champion).filter(Boolean)
+  if (champions.length !== 3) return false
+  const students = champions.map(champion => dependencies.getStudent(champion.studentId)).filter(Boolean)
+  if (students.length !== 3) return false
+  const classIds = [...new Set(students.map(student => student.classId))]
+  Object.assign(windMeet, {
+    match: { id: `${windMeet.meet.id}-friendship`, grade: 0, round: 0, number: 1,
+      classIds, classNames: classIds.map(id => champions.find(champion => champion.classId === id)?.className || ''),
+      studentIds: students.map(student => student.id) },
+    athletes: students.map(student => ({ student: { ...student }, profile: createSprintProfile(student) })),
+    friendly: true, friendshipResults: [], elapsed: -3, phase: 'countdown',
+    startedAt: new Date(at).toISOString(), finishedAt: '', error: '',
+  })
+  cue = 3
+  if (!windMeet.paused && recentCue(at)) playCountdown(3)
+  return true
+}
+
+function finishFriendship() {
+  const classNames = new Map(windMeet.meet.grades.filter(group => group.champion)
+    .map(group => [group.champion.classId, group.champion.className]))
+  windMeet.friendshipResults = windMeet.athletes.map((athlete, lane) => ({
+    studentId: athlete.student.id, name: athlete.student.name, classId: athlete.student.classId,
+    className: classNames.get(athlete.student.classId) || '',
+    time: athlete.profile.time, lane,
+  })).sort((a, b) => a.time - b.time || a.lane - b.lane).map((result, index) => ({ ...result, place: index + 1 }))
+  Object.assign(windMeet, { active: false, phase: 'complete', paused: false })
+  clock.stop()
+  setMusicMode('ambient')
 }
 
 export function startWindMeet(meet, speed = 1) {
   endedAt = 0
-  Object.assign(windMeet, { active: true, meet, speed, paused: false })
+  Object.assign(windMeet, { active: true, meet, speed, paused: false, friendly: false, friendshipResults: [] })
   setMusicMode('race')
   prepare(clock.start(speed))
 }
@@ -34,7 +67,7 @@ export function startWindMeet(meet, speed = 1) {
 export function restoreWindMeet(meet) {
   if (!meet) return
   endedAt = 0
-  Object.assign(windMeet, { active: true, meet, speed: 1, paused: true })
+  Object.assign(windMeet, { active: true, meet, speed: 1, paused: true, friendly: false, friendshipResults: [] })
   prepare(performance.timeOrigin + performance.now())
 }
 
@@ -69,11 +102,13 @@ async function saveMatch() {
       windMeet.startedAt, windMeet.finishedAt || new Date().toISOString())
     windMeet.meet = meet
     if (meet.status === 'complete') {
-      windMeet.active = false
-      windMeet.phase = 'complete'
       windMeet.paused = false
-      clock.stop()
-      setMusicMode('ambient')
+      if (!prepareFriendship(endedAt || performance.timeOrigin + performance.now())) {
+        windMeet.active = false
+        windMeet.phase = 'complete'
+        clock.stop()
+        setMusicMode('ambient')
+      } else setMusicMode('race')
     } else {
       prepare(endedAt || performance.timeOrigin + performance.now())
       // An awaiting write may have outlived the mounted race view. Restore
@@ -105,7 +140,11 @@ async function advance() {
         if (windMeet.elapsed >= 0) { windMeet.phase = 'running'; if (recentCue(at)) playStartWhistle() }
       }
       if (windMeet.phase === 'running' && windMeet.elapsed >= maxTime() && !windMeet.finishedAt) windMeet.finishedAt = new Date(at).toISOString()
-      if (windMeet.phase === 'running' && windMeet.elapsed >= runoutEnd()) { endedAt = at; if (!await saveMatch()) break }
+      if (windMeet.phase === 'running' && windMeet.elapsed >= runoutEnd()) {
+        endedAt = at
+        if (windMeet.friendly) { finishFriendship(); break }
+        if (!await saveMatch()) break
+      }
     }
   } finally { advancing = false }
 }
@@ -118,5 +157,5 @@ export async function retryWindMeetSave() {
 }
 
 export function dismissWindMeet() {
-  if (!windMeet.active) Object.assign(windMeet, { phase: 'idle', meet: null, match: null, athletes: [] })
+  if (!windMeet.active) Object.assign(windMeet, { phase: 'idle', meet: null, match: null, athletes: [], friendly: false, friendshipResults: [] })
 }

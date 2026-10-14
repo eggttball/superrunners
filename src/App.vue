@@ -16,7 +16,9 @@ const progressLabel = computed(() => syncState.busy && !syncState.ready ? syncSt
 const displayedProgress = computed(() => syncState.busy && !syncState.ready ? syncState.progress : game.progress)
 const documentTitle = computed(() => {
   if (authState.user && windMeet.active && windMeet.match) {
-    return `SUPER RUNNERS | ${windMeet.meet.schoolName} 風速小子 ${windMeet.match.classNames.join(' vs. ')} 第 ${windMeet.match.round} 輪`
+    const event = windMeet.friendly ? '三個年級風速小子友誼賽'
+      : windMeet.match.final ? '年級冠軍決賽' : `風速小子第 ${windMeet.match.round} 輪`
+    return `SUPER RUNNERS | ${windMeet.meet.schoolName} ${event}`
   }
   if (authState.user && autoMeet.active) {
     const school = getSchool(autoMeet.schoolId)

@@ -351,24 +351,25 @@ IndexedDB object store 版本 3 新增 `windMeets`，原有資料表及世界 `s
     grade: 1,
     entrants: [{ classId: 'class-id', className: '一年級 1 班', classNumber: 1,
       studentIds: ['student-a', 'student-b', 'student-c'] }],
-    rounds: [{ number: 1, matches: [{
+    rounds: [{ number: 1, isFinal: false, matches: [{
       id: 'meet-uuid-g1-r1-m1', grade: 1, round: 1, number: 1,
       classIds: ['class-a', 'class-b'], classNames: ['一年級 1 班', '一年級 2 班'],
       studentIds: ['a1', 'a2', 'a3', 'b1', 'b2', 'b3'],
       status: 'pending', // done 完賽；bye 輪空
       winnerClassId: null, winnerStudentId: null, winnerName: null,
-      winnerTime: null, raceId: null
+      winnerTime: null, raceId: null,
+      topThree: [] // 完賽後存 place、studentId、name、classId、className、time
     }] }],
     champion: null
   }]
 }
 ```
 
-每班前三名按「有效個人最佳，否則預估百米」排序，在本屆開賽時固定。每輪配對兩班，每場最多六人；第一名所屬班級晉級，單數班級輪空。百分之一秒相同時採跑道次序決勝；各年級獨立產生冠軍。
+每班前三名按「有效個人最佳，否則預估百米」排序，在本屆開賽時固定。第一輪配對兩班、每場六人；每場實際前三名不分班級全數晉級，與相鄰場次的前三名在下一輪合併比賽。只剩一組晉級者時，另開 `isFinal: true` 的三人年級決賽，第一名成為風速小子。單數班級輪空時，原三位學生一起晉級且不產生成績。含年級決賽的正式賽事總場數等於初始班級數（只有一個班級時也是一場）。百分之一秒同分時採跑道次序決勝。
 
 正式比賽紀錄 `races` 的 `mode` 為 `wind-selection`，帶有 `classIds`、`windMatchId`、`grade`、`round`，`classId` 為 `null`；結果快照仍含每位學生自己的 `classId`、班級名稱、學號、秒數與日期。選班後的前三名練習為 `wind-practice`，最多八人一組，不產生稱號或班級獎牌，仍更新個人最佳。
 
-跨班比賽的角色上衣與人物卡代表色，取自每位學生所屬班級的 `color`。歷程總覽直接由 `grades[].rounds[].matches` 建立淘汰樹，第一輪在底部、冠軍在頂部；贏者節點顯示 `winnerName`、得勝班級與 `winnerTime`。第一輪節點下方只列對戰兩班名稱，不顯示參賽學生姓名。前輪第 `i` 場（從 0 起算）連到下一輪第 `Math.floor(i / 2)` 場。輪空顯示「輪空」與空成績，不另存畫面座標，也不變更既有比賽資料。
+跨班比賽的角色上衣與人物卡代表色，取自每位學生所屬班級的 `color`。歷程總覽從 `grades[].entrants` 和 `grades[].rounds[].matches` 建立淘汰樹：底部班級節點列出初始三位參賽學生；每個對戰節點的 `topThree` 依名次顯示三位學生的班級與姓名，僅第一名顯示時間，點選節點開啟第一名資料。對戰節點第 `i` 個（從 0 起算）連到上一層相鄰的兩個節點；輪空節點保留三位晉級者，不產生成績。三個年級冠軍之間另跑一場三人友誼賽，只保存在當次畫面狀態，不加入 `races`、`windMeets`、個人最佳或淘汰樹。
 
 `world.windChampions` 存在 meta，索引為 `{ [schoolId]: { [grade]: champion } }`，champion 包含 `studentId`、`name`、`classId`、`className`、`grade`、`time`、`awardedAt`、`meetId`。每校每年級一位現任風速小子，新一屆該年級決賽完成時取代；舊冠軍仍保存在原屆 `grades[].champion`。學生資料本身不另外複製 boolean，畫面以此索引顯示稱號。
 
