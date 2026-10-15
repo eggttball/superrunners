@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { game, getSchool, timeText } from '../lib/game.js'
 import Icon from './Icon.vue'
 import WindMeetSummary from './WindMeetSummary.vue'
+import WindTitleBadge from './WindTitleBadge.vue'
 
 const props = defineProps({ runId: String, schoolIds: Array })
 defineEmits(['back'])
@@ -30,7 +31,7 @@ const displayedRows = computed(() => rows.value.slice((page.value - 1) * pageSiz
       <div class="section-title"><h2>各校風速小子</h2><div class="national-wind-pagination"><button class="btn small" :disabled="page === 1" @click="page--">上一頁</button><span>{{ page }} / {{ pages }}</span><button class="btn small" :disabled="page === pages" @click="page++">下一頁</button></div></div>
       <div class="table-wrap"><table class="data-table"><thead><tr><th>學校</th><th v-for="grade in grades" :key="grade">{{ grade }}</th><th>選拔歷程</th></tr></thead><tbody>
         <tr v-for="row in displayedRows" :key="row.school.id"><td>{{ row.school.city }}<br /><strong>{{ row.school.name }}</strong></td>
-          <td v-for="grade in 3" :key="grade"><button v-if="row.meet?.grades[grade - 1]?.champion" class="text-button national-wind-champion" @click="game.studentId = row.meet.grades[grade - 1].champion.studentId"><strong>{{ row.meet.grades[grade - 1].champion.name }}</strong><small>{{ row.meet.grades[grade - 1].champion.className }}</small><span class="mono">{{ timeText(row.meet.grades[grade - 1].champion.time) }}s</span></button><span v-else>—</span></td>
+          <td v-for="grade in 3" :key="grade"><button v-if="row.meet?.grades[grade - 1]?.champion" class="text-button national-wind-champion" @click="game.studentId = row.meet.grades[grade - 1].champion.studentId"><strong><WindTitleBadge :student-id="row.meet.grades[grade - 1].champion.studentId" compact />{{ row.meet.grades[grade - 1].champion.name }}</strong><small>{{ row.meet.grades[grade - 1].champion.className }}</small><span class="mono">{{ timeText(row.meet.grades[grade - 1].champion.time) }}s</span></button><span v-else>—</span></td>
           <td><button class="btn small" :disabled="!row.meet" @click="viewedMeet = row.meet">查看歷程<Icon name="arrow" :size="14" /></button></td>
         </tr>
       </tbody></table></div>

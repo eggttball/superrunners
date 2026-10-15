@@ -2,20 +2,23 @@
 import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { game, autoMeet, getSchool, getClass, initialize, go, toggleMusic, downloadSave, startAudio, pauseAutomaticMeet } from './lib/game.js'
 import { authState, signOut } from './lib/auth.js'
-import { syncState, retryCloudSync, stopCloudSync } from './lib/cloud.js'
+import { syncState, retryCloudSync, stopCloudSync, fetchRegionChampions } from './lib/cloud.js'
 import HomeView from './components/HomeView.vue'
 import SchoolsView from './components/SchoolsView.vue'
 import TeamsView from './components/TeamsView.vue'
 import RaceView from './components/RaceView.vue'
+import RegionsView from './components/RegionsView.vue'
 import StudentDialog from './components/StudentDialog.vue'
 import Icon from './components/Icon.vue'
 import AuthPanel from './components/AuthPanel.vue'
 import { windMeet, pauseWindMeet } from './lib/wind-meet.js'
+import './regions.css'
 
 const progressLabel = computed(() => syncState.busy && !syncState.ready ? syncState.phase : ({ population: '正在建立全國班級與學生', ranking: '正在計算全國能力排名', complete: '全國資料生成完成' }[game.phase] || game.phase))
 const displayedProgress = computed(() => syncState.busy && !syncState.ready ? syncState.progress : game.progress)
 const documentTitle = computed(() => {
   if (authState.user && windMeet.active && windMeet.match) {
+    if (windMeet.scope === 'regional') return `SUPER RUNNERS | ${windMeet.meet.friendly ? windMeet.meet.city + '校際友誼賽' : windMeet.meet.eventName} ${windMeet.match.final ? '冠軍決賽' : `第 ${windMeet.match.round} 輪 · 第 ${windMeet.match.number} 場`}`
     const event = windMeet.friendly ? '三個年級風速小子友誼賽'
       : `${['一年級', '二年級', '三年級'][windMeet.match.grade - 1]} ${windMeet.match.final ? '年級冠軍決賽' : `風速小子第 ${windMeet.match.round} 輪`}`
     return `SUPER RUNNERS | ${windMeet.meet.schoolName} ${event}`
@@ -33,6 +36,7 @@ const documentTitle = computed(() => {
   return 'SUPER RUNNERS | 校園田徑經理'
 })
 watch(documentTitle, title => { document.title = title }, { immediate: true })
+watch(() => syncState.ready && game.ready, ready => { if (ready) void fetchRegionChampions().catch(() => {}) })
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
 async function logout() { pauseAutomaticMeet(); pauseWindMeet(); stopCloudSync(); await signOut() }
@@ -77,6 +81,7 @@ onUnmounted(() => {
           <button class="nav-national" :aria-current="game.tab === 'schools' && game.nationalRanking ? 'page' : undefined" @click="openNationalRanking"><Icon name="trophy" :size="17" />全國排名</button>
           <button class="nav-teams" :aria-current="game.tab === 'teams' ? 'page' : undefined" @click="go('teams')"><Icon name="team" :size="17" />我的隊伍</button>
           <button class="nav-race" :aria-current="game.tab === 'race' ? 'page' : undefined" @click="game.raceTeamId = ''; go('race')"><Icon name="flag" :size="17" />校內比賽</button>
+          <button class="nav-region" :aria-current="game.tab === 'region' ? 'page' : undefined" @click="go('region')"><Icon name="pin" :size="17" />區域比賽</button>
         </div>
       </nav>
       <div v-if="authState.loading" class="auth-loading panel" role="status">正在確認登入狀態…</div>
@@ -87,6 +92,7 @@ onUnmounted(() => {
           <SchoolsView v-if="game.tab === 'schools'" />
           <TeamsView v-else-if="game.tab === 'teams'" />
           <RaceView v-else-if="game.tab === 'race'" />
+          <RegionsView v-else-if="game.tab === 'region'" />
         </template>
         <div v-else class="await-world panel"><Icon name="globe" :size="42" /><h2>你的田徑世界即將就緒</h2><p class="muted">正在讀取存檔；此瀏覽器沒有資料時，會從雲端還原。</p></div>
 

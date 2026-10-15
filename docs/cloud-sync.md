@@ -81,7 +81,7 @@ users/{uid}/
 
 ## 寫入、斷線與重試
 
-IndexedDB object store 版本目前為 `3`，原本資料格式 `schemaVersion: 3` 與資料庫名稱不變。新增：
+IndexedDB object store 版本目前為 `4`，原本資料格式 `schemaVersion: 3` 與資料庫名稱不變。新增：
 
 - `outbox`：尚未收到雲端確認的動作，包含 `id`、`uid`、`worldId`、`type`、`payload`、`createdAt`。不含任何登入 token。
 - `cloudCache`：按查詢範圍保存的動態快照，包含 `id`、`updatedAt`、`data`。
@@ -125,3 +125,21 @@ GitHub Actions 每次推送 `main` 後建置網站，以既有 `FIREBASE_SERVICE
 「全國風速小子選拔賽」依縣市／學校順序重用每校選拔與正式成績同步，年級冠軍仍寫入 `users/{uid}/worlds/{worldId}/dynamic/windChampions/{schoolId}/{grade}`，不需新的雲端稱號格式。網路中斷不影響下一場本機比賽，正式成績和稱號待同步操作留在 outbox，恢復連線後按序補傳。
 
 全國模式的學校清單、當前索引、速度與暫停狀態保存於本機 `nationalWindMeetProgress`；完成或終止後清除，不上傳雲端、不匯出。各校歷程的 `nationalRunId` 會隨正常歷程上傳，用來識別該屆賽事，並不包含續跑游標。每校最後的友誼賽不寫雲端紀錄或個人最佳。
+
+## 區域比賽資料
+
+IndexedDB store 版本升為 `4`，新增 `regionMeets`，不重抓固定學校／班級／學生資料。世界 `schemaVersion: 3` 與雲端 schemaVersion 1 保留，擴充動態路徑：
+
+```text
+dynamic/regionMeets/{city}/{meetId}     縣市運淘汰歷程與歷史冠軍
+dynamic/regionRaces/{city}/{raceId}     每一場正式區域賽成績
+dynamic/regionChampions/{city}         唯一現任風速王子
+```
+
+正式區域賽的 `heat` outbox 動作包含 `regionMeet`，決賽另帶 `regionChampion`；以一筆多路徑 PATCH 寫入區域成績、歷程、各參賽者個人最佳和四種排名，沿用離線保存／補傳、固定 raceId 與最佳成績不可變慢的規則。新增節點都由 Firebase Rules 驗證管理者 UID、Email 及 worldId；正式區域賽最多六個跑道，友誼賽不得寫入 regionMeets。
+
+啟動時只讀現任王子的小型索引（最多 22 位），供全站標籤辨識；選取縣市時讀該縣市的正式歷程、區域成績和現任王子。開賽前按所選範圍逐校讀取風速小子及全校排名，固定本次代表名單；未連線時採本機資料。進入指定學校／學生／隊伍也取得其縣市的現任王子。pending outbox 會覆蓋雲端讀取，離線的新王子不會被舊快照移除。全新瀏覽器還原涵蓋全部區域動態資料。
+
+王子索引與校內風速小子完全獨立：每次校內選拔不改王子，只有下一屆縣市正式決賽替換。友誼賽只存在當次頁面記憶體，不送出任何正式紀錄或個人最佳。
+
+現任風速王子另附 `awardedAtMs` 決賽完成時間。同步前讀取目前王子，較舊離線決賽只上傳歷史成績，不替換較新的王子；規則也驗證時間不得倒退，若別台裝置搶先更新會重讀並重試。

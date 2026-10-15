@@ -224,7 +224,7 @@ export function generateWorld(catalog, { seed = 'superrunners-tw-115-v3', create
     country: { code: 'TW', name: '臺灣' },
     createdAt, seed,
     source: { name: '教育部學校名錄', note: '學校名稱為真實公開資料；學生、能力與成績皆為虛構。' },
-    schools: [], students: [], teams: [], races: [], awards: [], windMeets: [], windChampions: {},
+    schools: [], students: [], teams: [], races: [], awards: [], windMeets: [], windChampions: {}, regionMeets: [], regionChampions: {},
     favoriteSchoolIds: [], followedTeamIds: [], settings: { muted: false },
   }
   onProgress?.({ phase: 'population', completed: 0, total: catalog.length, students: 0, progress: 0 })

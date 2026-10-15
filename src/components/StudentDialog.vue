@@ -47,6 +47,11 @@ const windHonors = computed(() => {
     .filter(champion => champion?.studentId === student.value?.id))
     .sort((a, b) => b.awardedAt.localeCompare(a.awardedAt))
 })
+const princeHonors = computed(() => {
+  game.revision
+  return game.world.regionMeets.flatMap(meet => meet.grades.map(group => group.champion))
+    .filter(champion => champion?.studentId === student.value?.id).sort((a, b) => b.awardedAt.localeCompare(a.awardedAt))
+})
 
 function close() { if (!saving.value) game.studentId = '' }
 
@@ -119,6 +124,7 @@ onUnmounted(() => {
         <label class="school-team-toggle"><div><Icon name="team" :size="21" /><span><strong>學校田徑隊員</strong><small>加入或移出 {{ school.name }}田徑隊</small></span></div><input v-model="isSchoolTeam" @change="teamEdited = true" type="checkbox" :disabled="saving" /><span class="switch-visual" aria-hidden="true"></span></label>
         <div class="representative-status"><div><Icon name="flag" :size="16" /><span>縣市代表隊</span><span class="badge" :class="{ green: student.isCityTeam }">{{ student.isCityTeam ? '已入選' : '未入選' }}</span></div><div><Icon name="globe" :size="16" /><span>國家代表隊</span><span class="badge" :class="{ green: student.isNationalTeam }">{{ student.isNationalTeam ? '已入選' : '未入選' }}</span></div></div>
         <p class="profile-note">代表隊身分由系統選拔產生；自動選拔將於下一階段開放。</p>
+        <template v-if="princeHonors.length"><div class="profile-section-heading"><h3><Icon name="flag" :size="17" />風速王子榮譽</h3><span>{{ princeHonors.length }} 屆冠軍</span></div><div v-for="honor in princeHonors" :key="honor.meetId" class="wind-profile-honor prince"><span>{{ honor.city }} · {{ honor.schoolName }}<small>{{ dateText(honor.awardedAt) }}</small></span><b class="mono">{{ timeText(honor.time) }}s</b></div></template>
         <template v-if="windHonors.length"><div class="profile-section-heading"><h3><Icon name="sprint" :size="17" />風速小子榮譽</h3><span>{{ windHonors.length }} 屆冠軍</span></div><div v-for="honor in windHonors" :key="honor.meetId" class="wind-profile-honor"><span>{{ honor.className }}<small>{{ dateText(honor.awardedAt) }}</small></span><b class="mono">{{ timeText(honor.time) }}s</b></div></template>
         <div class="profile-section-heading history-heading"><h3><Icon name="clock" :size="17" />比賽紀錄</h3><span>{{ history.length }} 次出賽 · {{ medalCount }} 面獎牌</span></div>
         <div v-if="!history.length" class="profile-history-empty"><Icon name="flag" :size="25" /><strong>故事，從第一場比賽開始</strong><p>完賽時間與當時的姓名、班級會永久保留在這裡。</p></div>

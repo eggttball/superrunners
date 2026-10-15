@@ -6,12 +6,12 @@
 
 - IndexedDB 資料庫名稱：`superrunners-taiwan-v3`
 - 資料結構版本：`schemaVersion: 3`
-- IndexedDB object store 版本：`3`，升級保留原有資料。
+- IndexedDB object store 版本：`4`，升級保留原有資料。
 - 每個瀏覽器各自保有本機快取，同一帳號連結同一個雲端世界。
 - 既有存檔首次連接時上傳至雲端。新的瀏覽器從雲端還原，不再重新隨機生成世界；有本機固定資料時不再重複下載。
 - 舊版資料庫 `superrunners-taiwan-v1`、`superrunners-taiwan-v2` 會在啟動時清除。
 
-資料庫使用一個 `meta` store、六個實體資料表與兩個同步資料表（其餘皆以 `id` 為 key）：
+資料庫使用一個 `meta` store、七個實體資料表與兩個同步資料表（其餘皆以 `id` 為 key）：
 
 | Store | 用途 |
 | --- | --- |
@@ -22,6 +22,7 @@
 | `races` | 每一組百米賽的完成紀錄 |
 | `awards` | 班級完整賽程完成後產生的前三名獎牌 |
 | `windMeets` | 風速小子選拔賽的參賽名單、每輪對戰與歷屆冠軍 |
+| `regionMeets` | 縣市運百米淘汰賽的學校代表、每輪晉級名單與歷屆風速王子 |
 | `outbox` | 與本機變更一起保存的待同步動作；雲端確認後移除 |
 | `cloudCache` | 排名等按需查詢的快照及更新時間 |
 
@@ -29,7 +30,7 @@
 
 ## 完整匯出 JSON
 
-匯出檔案將 `meta` 與六個實體 stores 合併成一個 JSON 物件；`outbox`、`cloudCache` 不匯出。這是本機目前快照，不代表所有尚未瀏覽學校的動態資料都已重新讀取。結構如下：
+匯出檔案將 `meta` 與七個實體 stores 合併成一個 JSON 物件；`outbox`、`cloudCache` 不匯出。這是本機目前快照，不代表所有尚未瀏覽學校的動態資料都已重新讀取。結構如下：
 
 ```js
 {
@@ -54,7 +55,9 @@
   races: [],
   awards: [],
   windMeets: [],
-  windChampions: {}
+  windChampions: {},
+  regionMeets: [],
+  regionChampions: {}
 }
 ```
 
@@ -92,6 +95,7 @@ erDiagram
 | `followedTeamIds` | `string[]` | 顯示於「我的隊伍」的隊伍 ID。 |
 | `settings.muted` | `boolean` | 背景音樂是否靜音。 |
 | `windChampions` | `object` | 學校 ID → 年級 → 現任風速小子稱號與決賽成績。 |
+| `regionChampions` | `object` | 縣市名稱 → 現任風速王子稱號與決賽成績。 |
 
 ## 學校與班級
 
@@ -399,3 +403,17 @@ IndexedDB object store 版本 3 新增 `windMeets`，原有資料表及世界 `s
 每場正式比賽提交後保存游標；切校前先保存下一校索引。重整時依游標和已提交的單校 `windMeets` 還原，當前未完成對戰重新起跑，已完成的正式對戰不重跑。預設沿用上次暫停與速度狀態，首次啟動為 16×。若中斷於友誼賽，該場三人友誼賽重新起跑，仍不保存正式成績。
 
 完成全國選拔或按「終止全國選拔」時清除游標。已產生成績、稱號與歷程保留；含 `nationalRunId` 的未完成單校歷程不會被當作獨立單校賽自動恢復，避免終止後重啟剩餘賽程。所有 full metadata 保存會保留最新本機游標，防止雲端補傳回應或比賽保存覆蓋進度。
+
+## 區域比賽與風速王子
+
+IndexedDB store 版本 4 新增 `regionMeets`；既有資料庫名稱、世界 schemaVersion 3、固定學生和全國自動賽進度保留。縣市名稱統一使用「臺」。
+
+`regionMeets` 每筆具有 `id`、`kind: 'regional'`、`city`、`eventName`、`schoolIds`、`startedAt`、`finishedAt`、`status`、`paused`、`friendly: false`、`completedMatches`、`totalMatches`。沿用樹狀歷程資料格式 `grades`，只含一組 `grade: 0`（表示跨年級的區域組，不是學生年級）。其 `entrants` 每筆保存 `schoolId`、`schoolName`、`studentIds` 及三位代表快照 `qualifiers`；學生本身年級仍是 1～3。
+
+各校代表優先取開賽時該年級現任風速小子；沒有稱號則以該年級個人最佳／預估時間排序選一人。每輪兩組對跑、前三名共同晉級，可能混合多所學校。`rounds[].matches[]` 保存 `studentIds`、`schoolIds`、`classIds`、`topThree`、`winnerStudentId`、`winnerTime`、`raceId` 等；`topThree` 每人含 `place`、`studentId`、`name`、`schoolId`、`schoolName`、`classId`、`className`、`grade`、`time`。奇數組輪空不產生成績；最後一場最多六人，第一名獲得冠軍。
+
+正式 `races` 的 `mode` 為 `regional`，追加 `city`、`regionMatchId`、當場 `schoolIds`、`round`。其 `schoolId` 僅為賽程首校的本機歸屬識別，所有參賽者真正的校籍保存在 `results[].schoolId`。雲端正式區域賽放在獨立 `regionRaces`，按縣市檢視完整歷史。
+
+`meta.regionChampions` 格式為 `{ [city]: champion }`，每個縣市最多一筆，champion 包含 `studentId`、`name`、`schoolId`、`schoolName`、`classId`、`className`、`grade`、`city`、`title: '風速王子'`、`time`、`meetId`、`awardedAt`、`awardedAtMs`（毫秒時間戳）。下屆正式決賽完成時才替換。校內選拔只修改 windChampions，不修改 regionChampions；全站 `getWindTitle` 優先回傳王子，再回傳風速小子，因此失去校內稱號不會移除王子。
+
+勾選兩所以上學校時，採友誼賽，所有代表以最多八人分組，自動跑完；`friendly: true` 的歷程及結果只在 windMeet 控制器記憶體，完全不寫入 regionMeets、races、最佳紀錄、稱號、outbox 或匯出 JSON。正式區域賽逐場保存，重整後從下一場重新準備並暫停，按繼續即可；切換站內頁面和其他應用程式沿用 Worker 計時持續比賽。

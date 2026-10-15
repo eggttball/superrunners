@@ -16,6 +16,8 @@ import WindTitleBadge from './WindTitleBadge.vue'
 import WindMeetSummary from './WindMeetSummary.vue'
 import NationalWindSummary from './NationalWindSummary.vue'
 
+const props = defineProps({ regionalOnly: Boolean })
+
 const gradeLabels = ['一年級', '二年級', '三年級']
 const selectedSchoolId = ref(game.schoolId)
 const selectedClasses = ref([])
@@ -51,9 +53,10 @@ const teamMembers = computed(() => {
 const automatic = computed(() => autoMeet.active || autoMeet.phase === 'complete')
 const windSelection = computed(() => windMeet.active || windMeet.phase === 'complete')
 const nationalWindSelection = computed(() => windSelection.value && windMeet.scope === 'national')
+const regionalSelection = computed(() => windSelection.value && windMeet.scope === 'regional')
 const friendlyRace = computed(() => windSelection.value && windMeet.friendly)
 const nationalAutomatic = computed(() => automatic.value && autoMeet.scope === 'national')
-const displayedSchoolId = computed(() => windSelection.value ? windMeet.schoolIds[windMeet.schoolIndex] || windMeet.meet?.schoolId : automatic.value ? autoMeet.schoolId : selectedSchoolId.value)
+const displayedSchoolId = computed(() => windSelection.value ? windMeet.schoolIds[windMeet.schoolIndex] || windMeet.meet?.schoolId || windMeet.meet?.schoolIds?.[0] : automatic.value ? autoMeet.schoolId : selectedSchoolId.value)
 const racePhase = computed(() => windSelection.value ? windMeet.phase : automatic.value ? autoMeet.phase : phase.value)
 const raceQueue = computed(() => automatic.value ? autoMeet.queue : queue.value)
 const raceHeatIndex = computed(() => windSelection.value ? windMeet.meet?.completedMatches || 0 : automatic.value ? autoMeet.heatIndex : heatIndex.value)
@@ -79,7 +82,9 @@ const current = computed(() => windSelection.value ? { ...windMeet.match, heat: 
 const teamRace = computed(() => !windSelection.value && Boolean(current.value?.teamId || game.raceTeamId))
 const currentClass = computed(() => current.value ? getClass(current.value.classId) : null)
 const currentTeam = computed(() => getTeam(current.value?.teamId || game.raceTeamId))
-const displayClassName = computed(() => friendlyRace.value ? '三個年級風速小子友誼賽' : windSelection.value ? !windMeet.match ? '準備選拔賽…' : `${gradeLabels[windMeet.match.grade - 1]} · ${windMeet.match.final ? '年級冠軍決賽' : `第 ${windMeet.match.round} 輪 · 前三名晉級`}` : windPractice.value ? '班級前三名練習' : currentClass.value?.name || (currentTeam.value ? `${currentTeam.value.name} 隊內賽` : ''))
+const displayClassName = computed(() => regionalSelection.value ? windMeet.meet?.friendly ? `校際友誼賽 · 第 ${windMeet.match?.number || 1} / ${windMeet.meet.totalMatches} 組`
+  : windMeet.match?.final ? '冠軍決賽 · 風速王子爭奪戰' : `第 ${windMeet.match?.round || 1} 輪 · 第 ${windMeet.match?.number || 1} 場 · 前三名晉級`
+  : friendlyRace.value ? '三個年級風速小子友誼賽' : windSelection.value ? !windMeet.match ? '準備選拔賽…' : `${gradeLabels[windMeet.match.grade - 1]} · ${windMeet.match.final ? '年級冠軍決賽' : `第 ${windMeet.match.round} 輪 · 前三名晉級`}` : windPractice.value ? '班級前三名練習' : currentClass.value?.name || (currentTeam.value ? `${currentTeam.value.name} 隊內賽` : ''))
 const currentRaceRecord = computed(() => {
   game.revision
   const raceId = windSelection.value ? windMeet.match?.id : automatic.value ? `${autoMeet.sessionId}-heat-${autoMeet.heatIndex + 1}` : currentHeatId.value
@@ -131,6 +136,7 @@ function rankClass(rank) {
   return ''
 }
 function hasNewPersonalBest(athlete) {
+  if (friendlyRace.value || (regionalSelection.value && windMeet.meet?.friendly)) return false
   if (raceElapsed.value < athlete.profile.time) return false
   const previousBest = athlete.student.best100
   return !Number.isFinite(previousBest) || previousBest <= 0 || athlete.profile.time < previousBest
@@ -379,6 +385,7 @@ function nextHeat() {
 }
 
 function returnToSetup() {
+  const returnToRegion = props.regionalOnly || regionalSelection.value
   viewedWindMeet.value = null
   dismissWindMeet()
   dismissAutomaticMeetResult()
@@ -389,6 +396,7 @@ function returnToSetup() {
   selectedClasses.value = []
   windPractice.value = false
   if (teamRace.value) { game.raceTeamId = ''; go('teams') }
+  if (returnToRegion) go('region')
 }
 function leaveTeamRaceSetup() { game.raceTeamId = ''; go('teams') }
 onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(frame); game.raceTitle = ''; if (!automatic.value && !windSelection.value) setMusicMode('ambient') })
@@ -397,7 +405,7 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
 <template>
   <section class="content-view race-view">
     <NationalWindSummary v-if="nationalWindSelection && racePhase === 'complete'" :run-id="windMeet.runId" :school-ids="windMeet.schoolIds" @back="returnToSetup" />
-    <WindMeetSummary v-else-if="viewedWindMeet || (windSelection && racePhase === 'complete')" :meet="viewedWindMeet || windMeet.meet" :friendship-results="viewedWindMeet ? [] : windMeet.friendshipResults" @back="returnToSetup" />
+    <WindMeetSummary v-else-if="viewedWindMeet || (windSelection && racePhase === 'complete')" :meet="viewedWindMeet || windMeet.meet" :friendship-results="viewedWindMeet ? [] : windMeet.friendshipResults" :back-label="regionalSelection ? '回區域比賽' : '回比賽選單'" @back="returnToSetup" />
     <template v-else-if="racePhase === 'setup'">
       <template v-if="teamRace">
         <GamePageHeader title="田徑隊內賽" caption="TEAM SPRINT" description="由所選隊伍的隊員同場競速，成績會更新個人最佳紀錄。" theme="race"><button class="btn ghost" @click="leaveTeamRaceSetup"><Icon name="back" :size="18" />回我的隊伍</button></GamePageHeader>
@@ -432,7 +440,7 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
     </template>
 
     <template v-else-if="racePhase !== 'complete'">
-      <div class="race-header"><div><h1>{{ teamRace ? currentTeam.name : school.name }}<span class="heading-dot">.</span></h1><p class="muted"><span v-if="windSelection" class="wind-race-caption">風速小子 · {{ displayClassName }}</span><template v-else>{{ displayClassName }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組</template><span v-if="automatic"> · {{ nationalAutomatic ? '全國校內自動賽' : '全校自動賽' }}</span></p><span v-if="currentRaceRecord?.syncStatus === 'pending'" class="badge local-pending">本機待同步</span></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
+      <div class="race-header"><div><h1>{{ regionalSelection ? windMeet.meet.friendly ? windMeet.meet.city + '校際友誼賽' : windMeet.meet.eventName : teamRace ? currentTeam.name : school.name }}<span class="heading-dot">.</span></h1><p class="muted"><span v-if="windSelection" class="wind-race-caption">{{ regionalSelection ? '' : '風速小子 · ' }}{{ displayClassName }}</span><template v-else>{{ displayClassName }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組</template><span v-if="automatic"> · {{ nationalAutomatic ? '全國校內自動賽' : '全校自動賽' }}</span></p><span v-if="currentRaceRecord?.syncStatus === 'pending'" class="badge local-pending">本機待同步</span></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
       <div v-if="nationalAutomatic" class="national-meet-status" role="status"><span><Icon name="pin" :size="16" /><strong>{{ school.city }}</strong> · 第 {{ autoMeet.schoolIndex + 1 }} / {{ autoMeet.schoolIds.length }} 所學校</span><span>已完成 {{ autoMeet.completedSchools }} 所 · {{ autoMeet.completedHeats.toLocaleString() }} / {{ autoMeet.totalHeats.toLocaleString() }} 組</span></div>
       <div v-if="nationalWindSelection" class="national-meet-status"><span><Icon name="pin" :size="16" /><strong>{{ school.city }}</strong> · 第 {{ windMeet.schoolIndex + 1 }} / {{ windMeet.schoolIds.length }} 所學校</span><span>已選拔 {{ windMeet.completedSchools }} 所 · 全國 {{ windMeet.completedMatches }} / {{ windMeet.totalMatches }} 場 · 當校 {{ windMeet.meet?.completedMatches || 0 }} / {{ windMeet.meet?.totalMatches || 0 }} 場</span></div>
       <div class="race-progress" role="progressbar" :aria-label="nationalAutomatic ? '全國校內賽程進度' : '賽程進度'" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(meetProgress)"><i :style="{ width: meetProgress + '%' }"></i></div>
@@ -446,7 +454,7 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
           </span>
           <span v-if="hasNewPersonalBest(athlete)" class="personal-best-badge" :title="athlete.student.best100 == null ? '建立第一筆正式百米最佳' : '刷新個人百米最佳'"><Icon name="trophy" :size="12" />{{ athlete.student.best100 == null ? '首筆 PB' : '新 PB!' }}</span>
           <strong class="lane-card-name"><WindTitleBadge :student-id="athlete.student.id" compact /><span v-if="athlete.student.isSchoolTeam" class="runner-identity-icon school-team-status" title="田徑隊" aria-label="田徑隊"><Icon name="sprint" :size="14" /></span><span v-else-if="athlete.student.isCityTeam" class="runner-identity-icon city-team-status" title="縣市代表隊" aria-label="縣市代表隊"><Icon name="flag" :size="14" /></span><span v-else-if="athlete.student.isNationalTeam" class="runner-identity-icon national-team-status" title="國家代表隊" aria-label="國家代表隊"><Icon name="globe" :size="14" /></span><span class="gender-icon" :class="athlete.student.gender === '男' ? 'gender-male' : 'gender-female'" :title="athlete.student.gender" :aria-label="athlete.student.gender"><Icon :name="athlete.student.gender === '男' ? 'male' : 'female'" :size="13" /></span>{{ athlete.student.name }}</strong>
-          <small>{{ windSelection || windPractice ? getClass(athlete.student.classId).name : athlete.student.nickname || getClass(athlete.student.classId).name }}</small>
+          <small v-if="regionalSelection" class="regional-runner-school">{{ getSchool(athlete.student.schoolId).name }}</small><small>{{ windSelection || windPractice ? getClass(athlete.student.classId).name : athlete.student.nickname || getClass(athlete.student.classId).name }}</small>
           <span class="lane-times">
             <span><small>預估</small><b class="mono">{{ timeText(athlete.student.baseline100) }}s</b></span>
             <span><small>{{ hasNewPersonalBest(athlete) ? '新最佳' : '最佳' }}</small><b class="mono">{{ hasNewPersonalBest(athlete) ? timeText(athlete.profile.time) + 's' : athlete.student.best100 === null ? '尚無' : timeText(athlete.student.best100) + 's' }}</b></span>

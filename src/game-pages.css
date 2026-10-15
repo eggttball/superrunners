@@ -268,6 +268,8 @@
 .wind-profile-honor { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; padding: 12px; background: #ffefc7; border: 1px solid #d1ad73; border-radius: 5px; color: #824b2a; font-size: 12px; }
 .wind-profile-honor small { display: block; margin-top: 5px; font-size: 10px; }
 .profile-name > .wind-title-badge { margin: 5px 0 0 5px; }
+.wind-prince-badge { background: #b53030; color: #ffe29a; border-color: #8b2525; box-shadow: 1px 2px 0 #df9e46; }
+.wind-profile-honor.prince { background: #fff0d5; border-color: #cf7352; color: #9c3232; }
 .school-student-link .wind-title-badge, .teams-view .student-link .wind-title-badge { margin-left: 6px; }
 .interior-shell .event-card.wind-event { background: #ffe39b; border-color: #97472c; box-shadow: 0 4px 0 #97472c, inset 0 3px 0 #ffffff70; }
 .interior-shell .event-card.wind-event:hover:not(:disabled) { background: #ffecbc; }

@@ -89,6 +89,33 @@
                   }
                 }
               },
+              "regionMeets": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$city": {
+                  "$meetId": {
+                    ".validate": "newData.hasChildren(['id', 'city', 'kind', 'status', 'grades', 'schoolIds', 'startedAt']) && newData.child('id').val() === $meetId && newData.child('city').val() === $city && newData.child('kind').val() === 'regional' && newData.child('friendly').val() === false && (newData.child('status').val() === 'running' || newData.child('status').val() === 'complete')"
+                  }
+                }
+              },
+              "regionChampions": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$city": {
+                  ".validate": "newData.hasChildren(['studentId', 'schoolId', 'classId', 'city', 'time', 'meetId', 'awardedAt', 'awardedAtMs']) && newData.child('city').val() === $city && newData.child('time').isNumber() && newData.child('time').val() >= 10 && newData.child('awardedAtMs').isNumber() && (!data.exists() || newData.child('awardedAtMs').val() >= data.child('awardedAtMs').val())"
+                }
+              },
+              "regionRaces": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$city": {
+                  "$raceId": {
+                    ".validate": "newData.hasChildren(['id', 'sessionId', 'city', 'regionMatchId', 'results', 'finishedAt']) && newData.child('id').val() === $raceId && newData.child('city').val() === $city && newData.child('mode').val() === 'regional' && newData.child('results').hasChild('0') && (!data.exists() || newData.child('finishedAt').val() === data.child('finishedAt').val())",
+                    "results": {
+                      "$index": {
+                        ".validate": "$index.matches(/^[0-5]$/) && newData.hasChildren(['studentId', 'schoolId', 'classId', 'time', 'lane', 'place']) && newData.child('time').isNumber() && newData.child('time').val() >= 10"
+                      }
+                    }
+                  }
+                }
+              },
               "windChampions": {
                 ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
                 "$schoolId": {

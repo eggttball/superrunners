@@ -11,6 +11,8 @@ self.onmessage = async event => {
     }
     world.windMeets ||= []
     world.windChampions ||= {}
+    world.regionMeets ||= []
+    world.regionChampions ||= {}
     if (event.data.type === 'restore') {
       rankStudents(world)
       await saveInitialWorld(world, progress)

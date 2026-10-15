@@ -54,6 +54,7 @@
 .game-menu-button { position: relative; display: flex; gap: 10px; align-items: center; width: 100%; min-height: 81px; padding: 10px 12px; border: 2px solid var(--game-ink); border-radius: 6px; background: #ddd3fa; color: var(--game-ink); box-shadow: 0 4px 0 var(--game-ink), inset 0 3px 0 #ffffff80; text-align: left; transition: transform .12s, box-shadow .12s, background .12s; }
 .game-menu-race { background: var(--game-yellow); }
 .game-menu-schools { background: #a6e2df; }
+.game-menu-region { background: #ffbd91; }
 .game-menu-button:hover { transform: translateY(-3px); box-shadow: 0 7px 0 var(--game-ink), inset 0 3px 0 #ffffff80; }
 .game-menu-button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--game-ink); }
 .game-menu-portrait { width: 52px; height: 52px; flex: 0 0 52px; display: grid; place-items: center; background: #fff9e878; border: 1px solid #263c5920; border-radius: 4px; }
@@ -110,7 +111,7 @@
   .game-menu-panel { overflow: visible; padding: 15px; gap: 12px; }
   .game-menu-intro h2 { font-size: 25px; margin-top: 5px; }
   .game-menu-intro p { display: none; }
-  .game-main-menu { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .game-main-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .game-menu-button { flex-direction: column; gap: 7px; text-align: center; padding: 13px 6px 11px; }
   .game-menu-copy strong { font-size: 16px; }
   .game-menu-copy small, .game-menu-arrow { display: none; }
