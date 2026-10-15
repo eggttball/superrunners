@@ -178,6 +178,14 @@
 .race-view .page-hero { flex-wrap: wrap; }
 .interior-shell .national-meet-button { min-height: 48px; background: #f4aa73; border-color: #6d3941; box-shadow: 0 4px 0 #6d3941, inset 0 3px 0 #ffffff50; }
 .interior-shell .national-meet-button:hover:not(:disabled) { background: #ffc58e; }
+.national-event-buttons { display: flex; flex-direction: column; gap: 12px; }
+.interior-shell .national-wind-button { background: #ffd071; }
+.interior-shell .national-wind-button:hover:not(:disabled) { background: #ffe39f; }
+.national-wind-summary { padding: 18px 22px; }
+.national-wind-summary > .section-title { margin-top: 0; flex-wrap: wrap; }
+.national-wind-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 12px 0; }
+.national-wind-champion { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.national-wind-champion small { color: var(--muted); }
 .national-meet-status { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 20px; margin: -8px 0 10px; color: #4b697b; font-size: 12px; font-variant-numeric: tabular-nums; }
 .national-meet-status > span { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; }
 .national-meet-status strong { color: #86492e; }

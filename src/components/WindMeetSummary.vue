@@ -6,6 +6,7 @@ import Icon from './Icon.vue'
 const props = defineProps({
   meet: Object,
   friendshipResults: { type: Array, default: () => [] },
+  backLabel: { type: String, default: '回比賽選單' },
 })
 defineEmits(['back'])
 const gradeLabel = grade => ['一年級', '二年級', '三年級'][grade - 1]
@@ -39,12 +40,14 @@ function buildTree(group) {
     if (match.status === 'bye') match.studentIds.forEach(id => firstRoundByes.add(id))
     for (const result of raceResultsByMatch.value.get(match.id) || []) firstRoundTimes.set(result.studentId, result.time)
   }
-  const firstCount = entrants.length === 1 ? 1 : Math.ceil(entrants.length / 2)
-  const counts = [firstCount]
-  while (counts.at(-1) > 1) counts.push(Math.ceil(counts.at(-1) / 2))
+  const counts = group.rounds.map(round => round.matches.length)
+  if (!counts.length) counts.push(Math.ceil(entrants.length / 2))
   const hasLegacyChampionRound = Boolean(group.champion && !group.rounds.at(-1)?.isFinal)
   const hasSavedFinalRound = group.rounds.some(round => round.isFinal)
-  if (entrants.length > 1 && !hasLegacyChampionRound && !hasSavedFinalRound) counts.push(1) // Three survivors run a separate grade final.
+  if (!hasLegacyChampionRound && !hasSavedFinalRound) {
+    while (counts.at(-1) > 1) counts.push(Math.ceil(counts.at(-1) / 2))
+    if (entrants.length > 1) counts.push(1) // Reserve exactly one separate three-runner final.
+  }
   const roundCount = counts.length
   const width = Math.max(320, GUTTER + entrants.length * SLOT_WIDTH + 20)
   const leafY = TOP + roundCount * ROW_GAP
@@ -117,7 +120,7 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
   <div class="wind-summary">
     <div class="panel wind-summary-header">
       <div><span class="eyebrow">WIND RUNNERS</span><h1>風速小子選拔賽</h1><p>{{ meet.schoolName }} · {{ dateText(meet.startedAt) }}</p><span class="muted">{{ meet.completedMatches }} / {{ meet.totalMatches }} 場對戰 · {{ meet.status === 'complete' ? '選拔完成' : '選拔進行中' }}</span></div>
-      <button class="btn primary" @click="$emit('back')"><Icon name="back" :size="17" />回比賽選單</button>
+      <button class="btn primary" @click="$emit('back')"><Icon name="back" :size="17" />{{ backLabel }}</button>
     </div>
 
     <section v-if="friendshipResults.length" class="panel wind-friendship-summary">

@@ -8,7 +8,7 @@ import { playCountdown, playStartWhistle, setMusic, setMusicMode } from './audio
 import { compareSchoolOrder } from './school-order.js'
 import { createMeetClock } from './meet-clock.js'
 import { createWindMeet, nextWindMatch, completeWindMatch } from './wind-selection.js'
-import { installWindMeet, restoreWindMeet, windMeet } from './wind-meet.js'
+import { installWindMeet, restoreWindMeet, restoreNationalWindMeet, windMeet } from './wind-meet.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -85,8 +85,15 @@ function boot() {
         classes = new Map()
         for (const school of world.schools) for (const cls of school.classes) classes.set(cls.id, cls)
         game.world = world
-        installWindMeet({ getStudent, saveMatch: recordWindMatch, savePause: saveWindPause })
-        restoreWindMeet(world.windMeets.filter(meet => meet.status === 'running').sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0])
+        installWindMeet({ getStudent, saveMatch: recordWindMatch, savePause: saveWindPause,
+          canStart: () => !autoMeet.active, createMeet: createSchoolWindMeet,
+          getMeet: id => game.world.windMeets.find(meet => meet.id === id),
+          getRunMeets: runId => game.world.windMeets.filter(meet => meet.nationalRunId === runId),
+          saveProgress: async progress => {
+            await saveLocalMetaPatch({ nationalWindMeetProgress: progress })
+            game.world.nationalWindMeetProgress = progress
+          },
+        })
         installCloudSync(() => game.world, mergeCloudData)
         // Existing local data is usable immediately, even with an offline
         // backlog or a long first upload. The outbox preserves new edits.
@@ -96,11 +103,14 @@ function boot() {
         game.ready = true
         game.phase = '全國資料已就緒'
         game.revision++
+        const restoredWind = await restoreNationalWindMeet(world.nationalWindMeetProgress)
+        if (!restoredWind) restoreWindMeet(world.windMeets.filter(meet => meet.status === 'running' && !meet.nationalRunId)
+          .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0])
         const cancelledRuns = new Set(world.cancelledAutomaticMeetRunIds || [])
         const savedProgress = world.autoMeetProgress?.active && !cancelledRuns.has(world.autoMeetProgress.runId)
           ? world.autoMeetProgress : null
         const progress = savedProgress || recoverNationalAutomaticMeet(world)
-        if (progress) {
+        if (progress && !windMeet.active) {
           resumeAutomaticMeet(progress)
           persistAutoMeetProgress()
         }
@@ -791,12 +801,15 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
   })
 }
 
-export async function createSchoolWindMeet(schoolId) {
+export async function createSchoolWindMeet(schoolId, { id, nationalRunId } = {}) {
   return transaction(async () => {
-    if (autoMeet.active || windMeet.active) throw new Error('請先完成目前的自動賽程。')
+    const nationalCurrent = nationalRunId && windMeet.active && windMeet.scope === 'national' && windMeet.runId === nationalRunId
+    if (autoMeet.active || (windMeet.active && !nationalCurrent) || (nationalRunId && !nationalCurrent)) throw new Error('請先完成目前的自動賽程。')
+    const existing = id && game.world.windMeets.find(meet => meet.id === id)
+    if (existing) return existing
     const school = getSchool(schoolId)
     if (!school) throw new Error('請先選擇學校。')
-    const meet = createWindMeet(school, getStudent)
+    const meet = { ...createWindMeet(school, getStudent, id), ...(nationalRunId ? { nationalRunId } : {}) }
     await saveChanges(game.world, { windMeets: [meet] }, { enqueue: cloudOperation('patch', {
       [`dynamic/windMeets/${schoolId}/${meet.id}`]: meet,
     }) })

@@ -27,7 +27,7 @@ export function staticTeam(team) {
 }
 
 export function staticMetadata(world) {
-  const { schools, students, teams, races, awards, windMeets, windChampions, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, cancelledAutomaticMeetRunIds, exportedAt, ...meta } = world
+  const { schools, students, teams, races, awards, windMeets, windChampions, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, exportedAt, ...meta } = world
   return meta
 }
 

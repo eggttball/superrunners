@@ -369,8 +369,33 @@ IndexedDB object store 版本 3 新增 `windMeets`，原有資料表及世界 `s
 
 正式比賽紀錄 `races` 的 `mode` 為 `wind-selection`，帶有 `classIds`、`windMatchId`、`grade`、`round`，`classId` 為 `null`；結果快照仍含每位學生自己的 `classId`、班級名稱、學號、秒數與日期。選班後的前三名練習為 `wind-practice`，最多八人一組，不產生稱號或班級獎牌，仍更新個人最佳。
 
-跨班比賽的角色上衣與人物卡代表色，取自每位學生所屬班級的 `color`。歷程總覽從 `grades[].entrants` 和 `grades[].rounds[].matches` 建立淘汰樹：底部班級節點列出初始三位參賽學生；每個對戰節點的 `topThree` 依名次顯示三位學生的班級與姓名，僅第一名顯示時間，點選節點開啟第一名資料。對戰節點第 `i` 個（從 0 起算）連到上一層相鄰的兩個節點；輪空節點保留三位晉級者，不產生成績。三個年級冠軍之間另跑一場三人友誼賽，只保存在當次畫面狀態，不加入 `races`、`windMeets`、個人最佳或淘汰樹。
+跨班比賽的角色上衣與人物卡代表色，取自每位學生所屬班級的 `color`。歷程總覽從 `grades[].entrants` 和 `grades[].rounds[].matches` 建立淘汰樹：底部班級節點列出初始三位參賽學生及首輪實際成績；每個對戰節點的 `topThree` 依名次顯示三位學生的班級、姓名與各自秒數，點選節點開啟第一名資料。前輪第 `i` 個對戰節點（從 0 起算）連到下一輪的第 `Math.floor(i / 2)` 個節點；輪空節點保留三位晉級者，不產生成績。三個年級冠軍之間另跑一場三人友誼賽，只保存在當次畫面狀態，不加入 `races`、`windMeets`、個人最佳或淘汰樹。
 
 `world.windChampions` 存在 meta，索引為 `{ [schoolId]: { [grade]: champion } }`，champion 包含 `studentId`、`name`、`classId`、`className`、`grade`、`time`、`awardedAt`、`meetId`。每校每年級一位現任風速小子，新一屆該年級決賽完成時取代；舊冠軍仍保存在原屆 `grades[].champion`。學生資料本身不另外複製 boolean，畫面以此索引顯示稱號。
 
 每場比賽、個人最佳、對戰樹及決賽稱號於同一 IndexedDB transaction 保存。全部內容納入 JSON 匯出與雲端待同步。重整後找出本機尚在 `running` 的選拔賽，從最後保存的下一場對戰恢復；為方便確認進度，預設先暫停，按「繼續」即可起跑。被中斷而尚未完賽的一場會重新起跑。
+
+### 全國風速小子選拔的本機進度
+
+`world.nationalWindMeetProgress` 只儲存在本機 IndexedDB 的 `meta/world`，不包含於匯出 JSON 或 Realtime Database 固定 metadata：
+
+```js
+{
+  active: true,
+  runId: 'wind-national-uuid',
+  schoolIds: ['school-a', 'school-b'],
+  schoolIndex: 0,
+  completedSchools: 0,
+  completedMatches: 12,
+  totalMatches: 60,
+  speed: 16,
+  paused: false,
+  stage: 'school' // nextschool 準備下一校；friendly 友誼賽；finished 等待清除進度
+}
+```
+
+縣市順序共用 `school-order.js`，每校完整完成一年級至三年級的選拔與三冠軍友誼賽，再換下一校。各校 `windMeets[].id` 為 `${runId}-${schoolId}`，並附加 `nationalRunId`，以辨識同一全國賽程、建立固定的重試 ID 和呈現全國完成總覽。
+
+每場正式比賽提交後保存游標；切校前先保存下一校索引。重整時依游標和已提交的單校 `windMeets` 還原，當前未完成對戰重新起跑，已完成的正式對戰不重跑。預設沿用上次暫停與速度狀態，首次啟動為 16×。若中斷於友誼賽，該場三人友誼賽重新起跑，仍不保存正式成績。
+
+完成全國選拔或按「終止全國選拔」時清除游標。已產生成績、稱號與歷程保留；含 `nationalRunId` 的未完成單校歷程不會被當作獨立單校賽自動恢復，避免終止後重啟剩餘賽程。所有 full metadata 保存會保留最新本機游標，防止雲端補傳回應或比賽保存覆蓋進度。

@@ -190,8 +190,8 @@ export async function saveChanges(world, changes = {}, { enqueue, acknowledge, c
           const nextMeta = metadata(world)
           // Automatic-meet progress is browser-local state. Cloud merges and
           // race saves write full metadata, so preserve the newest local value.
-          if (readMeta.result && Object.hasOwn(readMeta.result, 'autoMeetProgress')) {
-            nextMeta.autoMeetProgress = readMeta.result.autoMeetProgress
+          for (const key of ['autoMeetProgress', 'nationalWindMeetProgress']) {
+            if (readMeta.result && Object.hasOwn(readMeta.result, key)) nextMeta[key] = readMeta.result[key]
           }
           nextMeta.cancelledAutomaticMeetRunIds = [...new Set([
             ...(nextMeta.cancelledAutomaticMeetRunIds || []),
@@ -232,7 +232,7 @@ export async function cachedCloudData(id) {
 // table consistent without duplicating the entire national population in memory.
 export async function exportWorld(world, onProgress = () => {}) {
   const parts = ['{']
-  const { autoMeetProgress, cancelledAutomaticMeetRunIds, ...exportMeta } = metadata(world)
+  const { autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, ...exportMeta } = metadata(world)
   const meta = { ...exportMeta, exportedAt: new Date().toISOString() }
   parts.push(JSON.stringify(meta).slice(1, -1))
   for (const table of TABLES) {

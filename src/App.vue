@@ -17,8 +17,11 @@ const displayedProgress = computed(() => syncState.busy && !syncState.ready ? sy
 const documentTitle = computed(() => {
   if (authState.user && windMeet.active && windMeet.match) {
     const event = windMeet.friendly ? '三個年級風速小子友誼賽'
-      : windMeet.match.final ? '年級冠軍決賽' : `風速小子第 ${windMeet.match.round} 輪`
+      : `${['一年級', '二年級', '三年級'][windMeet.match.grade - 1]} ${windMeet.match.final ? '年級冠軍決賽' : `風速小子第 ${windMeet.match.round} 輪`}`
     return `SUPER RUNNERS | ${windMeet.meet.schoolName} ${event}`
+  }
+  if (authState.user && windMeet.active && windMeet.scope === 'national') {
+    return `SUPER RUNNERS | 全國風速小子 ${getSchool(windMeet.schoolIds[windMeet.schoolIndex])?.name || ''}`
   }
   if (authState.user && autoMeet.active) {
     const school = getSchool(autoMeet.schoolId)
