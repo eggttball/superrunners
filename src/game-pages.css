@@ -274,8 +274,8 @@
 .wind-summary-header h1 { margin: 7px 0; font-size: clamp(24px, 3.2vw, 32px); }
 .wind-summary-header p { margin: 8px 0; font-size: 14px; }
 .wind-summary-header .muted { font-size: 13px; }
-.wind-grade-summary .section-title h2 { font-size: 19px; }
-.wind-grade-summary { min-width: 0; }
+.wind-grade-summary .section-title h2 { font-size: 20px; }
+.wind-grade-summary { min-width: 0; padding: 4px 20px 18px; }
 .wind-friendship-summary { border: 2px solid #bd7c3e; background: #fff2c9; }
 .wind-friendship-summary .section-title h2 { display: flex; align-items: center; gap: 8px; color: #8a431d; font-size: 19px; }
 .wind-friendship-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -294,7 +294,9 @@
 .wind-tree-round-label { position: absolute; left: 12px; transform: translateY(-50%); font-size: 12px; font-weight: 700; color: #846242; }
 .wind-tree-leaf { position: absolute; transform: translate(-50%, -50%); width: 136px; height: 92px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px; overflow: hidden; border: 2px solid #67796b; border-top: 5px solid var(--class-color); border-radius: 5px; background: #fffdf4; color: #40564d; box-shadow: 2px 3px 0 #50615330; text-align: center; }
 .wind-tree-leaf > strong { max-width: 100%; overflow: hidden; color: #8a431d; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.wind-tree-leaf > span { max-width: 100%; overflow: hidden; font-size: 11px; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.wind-tree-leaf > span { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 4px; max-width: 100%; overflow: hidden; font-size: 11px; line-height: 1.15; text-align: left; }
+.wind-tree-leaf > span > strong { min-width: 0; flex: 1; overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.wind-tree-leaf > span > small { flex: 0 0 auto; color: #92502d; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .wind-tree-node { position: absolute; transform: translate(-50%, -50%); width: 152px; height: 116px; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; padding: 5px; border: 2px solid #53665f; border-top: 5px solid var(--class-color); border-radius: 5px; background: #fffdf4; color: var(--ink); box-shadow: 2px 3px 0 #50615330; cursor: pointer; }
 .wind-tree-place { min-height: 27px; display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 2px 3px; border-radius: 3px; text-align: left; }
 .wind-tree-place.first { background: #ffe6a6; }

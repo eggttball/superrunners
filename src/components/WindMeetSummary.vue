@@ -33,6 +33,12 @@ function finishersFor(match) {
 
 function buildTree(group) {
   const entrants = group.entrants
+  const firstRoundTimes = new Map()
+  const firstRoundByes = new Set()
+  for (const match of group.rounds[0]?.matches || []) {
+    if (match.status === 'bye') match.studentIds.forEach(id => firstRoundByes.add(id))
+    for (const result of raceResultsByMatch.value.get(match.id) || []) firstRoundTimes.set(result.studentId, result.time)
+  }
   const firstCount = entrants.length === 1 ? 1 : Math.ceil(entrants.length / 2)
   const counts = [firstCount]
   while (counts.at(-1) > 1) counts.push(Math.ceil(counts.at(-1) / 2))
@@ -49,7 +55,8 @@ function buildTree(group) {
     const x = GUTTER + (index + 0.5) * (width - GUTTER - 20) / entrants.length
     return { id: entry.classId, entry, x, y: leafY, left: x - SLOT_WIDTH / 2, right: x + SLOT_WIDTH / 2,
       color: getClass(entry.classId)?.color || '#c7cfc1',
-      students: entry.studentIds.map(getStudent).filter(Boolean) }
+      students: entry.studentIds.map(getStudent).filter(Boolean).map(student => ({ ...student,
+        raceTime: firstRoundTimes.get(student.id) ?? null, firstRoundBye: firstRoundByes.has(student.id) })) }
   })
   const links = []
   let previous = leaves
@@ -134,7 +141,7 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
 
           <article v-for="leaf in group.tree.leaves" :key="leaf.id" class="wind-tree-leaf" :style="{ left: `${leaf.x / group.tree.width * 100}%`, top: `${leaf.y}px`, '--class-color': leaf.color }">
             <strong>{{ leaf.entry.className }}</strong>
-            <span v-for="student in leaf.students" :key="student.id">{{ student.name }}</span>
+            <span v-for="student in leaf.students" :key="student.id"><strong>{{ student.name }}</strong><small v-if="student.raceTime !== null" class="mono">{{ timeText(student.raceTime) }}s</small><small v-else-if="student.firstRoundBye">輪空</small></span>
           </article>
 
           <button
