@@ -47,21 +47,25 @@ export function predict100(student) {
 function raceTime(student, random) {
   const a = attributes(student)
   const baseline = finite(student?.baseline100, predict100(student))
-  // Three samples form a narrow bell-shaped variation around the student's
-  // baseline. Quantizing to hundredths allows equal runners to occasionally
-  // tie while keeping most attempts a few hundredths apart.
-  const variation = (random() + random() + random() - 1.5) * 0.20
+  const currentBest = finite(student?.best100, baseline)
+  // Ordinary form stays close to the estimate: three samples produce a
+  // triangular variation bounded to ±0.10 s. This keeps a 10.50 s runner's
+  // usual results near 10.4–10.6 instead of letting noise create huge PB jumps.
+  const variation = (random() + random() + random() - 1.5) * (0.20 / 3)
   const explosivePotential = (a.explosiveness - 1) / 9
-  const breakthroughChance = 0.03 + 0.22 * explosivePotential
+  const pace = Math.min(baseline, currentBest)
+  const remainingHeadroom = Math.max(0, Math.min(1, (pace - 10) / 6))
+  const paceDifficulty = remainingHeadroom * remainingHeadroom
+  const breakthroughChance = (0.025 + 0.14 * explosivePotential) * paceDifficulty
   let time = baseline + variation
 
-  // Explosiveness is also upside: a powerful starter can occasionally run
-  // beyond the normal day-to-day variation and set a new personal best.
+  // Explosiveness adds upside, but faster performances become progressively
+  // harder to improve. The fourth-power roll makes large gains much rarer
+  // than small ones; slower runners have more room for an occasional jump.
   if (random() < breakthroughChance) {
-    const currentBest = finite(student?.best100, baseline)
-    const improvement = 0.02 + random() * (0.06 + 0.38 * explosivePotential)
-    const potentialFloor = baseline - (0.10 + 0.55 * explosivePotential)
-    time = Math.min(time, Math.max(potentialFloor, currentBest - improvement))
+    const maxImprovement = 0.45 + 0.15 * explosivePotential + 0.26 * Math.max(0, pace - 10.5)
+    const improvement = 0.02 + (maxImprovement - 0.02) * random() ** 4
+    time = Math.min(time, currentBest - improvement)
   }
 
   return Math.max(10.01, Math.round(time * 100) / 100)
