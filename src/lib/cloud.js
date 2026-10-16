@@ -367,6 +367,7 @@ function normalizeWindMeet(meet) {
   return { ...meet, grades: values(meet.grades).map(group => ({ ...group,
     entrants: values(group.entrants).map(entry => ({ ...entry, studentIds: values(entry.studentIds),
       ...(entry.qualifiers ? { qualifiers: values(entry.qualifiers) } : {}) })),
+    ...(group.podium != null ? { podium: values(group.podium) } : {}),
     rounds: values(group.rounds).map(round => ({ ...round, matches: values(round.matches).map(match => ({ ...match,
       classIds: values(match.classIds), classNames: values(match.classNames), studentIds: values(match.studentIds),
       topThree: values(match.topThree), ...(match.schoolIds ? { schoolIds: values(match.schoolIds) } : {}),

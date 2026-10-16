@@ -61,7 +61,7 @@ export function createRegionalMeet(city, schools, getStudent, champions, getClas
     schoolIds: entrants.map(entry => entry.schoolId), startedAt: new Date().toISOString(), finishedAt: null,
     status: 'running', paused: false, completedMatches: 0,
     totalMatches: friendly ? firstRound.matches.length : Math.max(1, entrants.length - 1),
-    grades: [{ grade: 0, entrants, rounds: [firstRound], champion: null }] }
+    grades: [{ grade: 0, entrants, rounds: [firstRound], champion: null, podium: null }] }
 }
 
 export function completeRegionalMatch(meet, matchId, results, finishedAt) {
@@ -87,8 +87,11 @@ export function completeRegionalMatch(meet, matchId, results, finishedAt) {
   next.completedMatches++
   if (round.matches.every(match => match.status !== 'pending')) {
     if (round.isFinal || meet.friendly) {
-      if (!meet.friendly) group.champion = { ...winner, city: meet.city, title: '風速王子',
-        awardedAt: finishedAt, awardedAtMs: Date.parse(finishedAt), meetId: meet.id }
+      if (!meet.friendly) {
+        group.podium = topThree.map(result => ({ ...result, city: meet.city, meetId: meet.id,
+          awardedAt: finishedAt, awardedAtMs: Date.parse(finishedAt) }))
+        group.champion = { ...group.podium[0], title: '風速王子' }
+      }
       next.status = 'complete'
       next.finishedAt = finishedAt
       next.paused = false

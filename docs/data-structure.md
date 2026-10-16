@@ -22,7 +22,7 @@
 | `races` | 每一組百米賽的完成紀錄 |
 | `awards` | 班級完整賽程完成後產生的前三名獎牌 |
 | `windMeets` | 風速小子選拔賽的參賽名單、每輪對戰與歷屆冠軍 |
-| `regionMeets` | 縣市運百米淘汰賽的學校代表、每輪晉級名單與歷屆風速王子 |
+| `regionMeets` | 縣市運百米淘汰賽的學校代表、每輪晉級名單、決賽頒獎名次與歷屆風速王子 |
 | `outbox` | 與本機變更一起保存的待同步動作；雲端確認後移除 |
 | `cloudCache` | 排名等按需查詢的快照及更新時間 |
 
@@ -410,7 +410,7 @@ IndexedDB store 版本 4 新增 `regionMeets`；既有資料庫名稱、世界 s
 
 `regionMeets` 每筆具有 `id`、`kind: 'regional'`、`city`、`eventName`、`schoolIds`、`startedAt`、`finishedAt`、`status`、`paused`、`friendly: false`、`completedMatches`、`totalMatches`。沿用樹狀歷程資料格式 `grades`，只含一組 `grade: 0`（表示跨年級的區域組，不是學生年級）。其 `entrants` 每筆保存 `schoolId`、`schoolName`、`studentIds` 及三位代表快照 `qualifiers`；學生本身年級仍是 1～3。
 
-各校代表優先取開賽時該年級現任風速小子；沒有稱號則以該年級個人最佳／預估時間排序選一人。每輪兩組對跑、前三名共同晉級，可能混合多所學校。`rounds[].matches[]` 保存 `studentIds`、`schoolIds`、`classIds`、`topThree`、`winnerStudentId`、`winnerTime`、`raceId` 等；`topThree` 每人含 `place`、`studentId`、`name`、`schoolId`、`schoolName`、`classId`、`className`、`grade`、`time`。奇數組輪空不產生成績；最後一場最多六人，第一名獲得冠軍。
+各校代表優先取開賽時該年級現任風速小子；沒有稱號則以該年級個人最佳／預估時間排序選一人。每輪兩組對跑、前三名共同晉級，可能混合多所學校。`rounds[].matches[]` 保存 `studentIds`、`schoolIds`、`classIds`、`topThree`、`winnerStudentId`、`winnerTime`、`raceId` 等；`topThree` 每人含 `place`、`studentId`、`name`、`schoolId`、`schoolName`、`classId`、`className`、`grade`、`time`。奇數組輪空不產生成績；最後一場開始前會自動暫停，待使用者按繼續才開跑。決賽結束後，`grades[0].podium` 保存冠軍、亞軍、季軍及名次、選手、縣市、賽事與時間快照；只有冠軍另保存為 `grades[0].champion` 並取得風速王子稱號。既有歷屆賽事若沒有 `podium`，個人頁面仍可從決賽 `topThree` 顯示亞軍、季軍紀錄。
 
 正式 `races` 的 `mode` 為 `regional`，追加 `city`、`regionMatchId`、當場 `schoolIds`、`round`。其 `schoolId` 僅為賽程首校的本機歸屬識別，所有參賽者真正的校籍保存在 `results[].schoolId`。雲端正式區域賽放在獨立 `regionRaces`，按縣市檢視完整歷史。
 

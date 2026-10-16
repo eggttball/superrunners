@@ -270,6 +270,9 @@
 .profile-name > .wind-title-badge { margin: 5px 0 0 5px; }
 .wind-prince-badge { background: #b53030; color: #ffe29a; border-color: #8b2525; box-shadow: 1px 2px 0 #df9e46; }
 .wind-profile-honor.prince { background: #fff0d5; border-color: #cf7352; color: #9c3232; }
+.wind-profile-honor.regional-podium { justify-content: flex-start; background: #eef0d8; border-color: #b0b785; color: #576345; }
+.wind-profile-honor.regional-podium > span { flex: 1; min-width: 0; }
+.wind-profile-honor.regional-podium > em { flex: 0 0 auto; padding: 5px 8px; border: 1px solid #c39b59; border-radius: 4px; background: #ffe5a5; color: #81522a; font-size: 11px; font-style: normal; font-weight: 800; }
 .school-student-link .wind-title-badge, .teams-view .student-link .wind-title-badge { margin-left: 6px; }
 .interior-shell .event-card.wind-event { background: #ffe39b; border-color: #97472c; box-shadow: 0 4px 0 #97472c, inset 0 3px 0 #ffffff70; }
 .interior-shell .event-card.wind-event:hover:not(:disabled) { background: #ffecbc; }

@@ -96,10 +96,16 @@ async function finishNationalSchool(at) {
 function prepare(at) {
   const match = nextWindMatch(windMeet.meet)
   if (!match) return false
+  const dramaticFinal = windMeet.meet.kind === 'regional' && !windMeet.meet.friendly && match.final
   Object.assign(windMeet, { match, athletes: match.studentIds.map(id => {
     const student = dependencies.getStudent(id)
     return { student: { ...student }, profile: createSprintProfile(student) }
   }), friendly: false, elapsed: -3, phase: 'countdown', startedAt: new Date(at).toISOString(), finishedAt: '', error: '' })
+  if (dramaticFinal && !windMeet.paused) {
+    windMeet.paused = true
+    clock.pause()
+    saveControl()
+  }
   windMeet.stage = windMeet.scope === 'regional' ? 'regional' : 'school'
   cue = 3
   if (!windMeet.paused && recentCue(at)) playCountdown(3)
