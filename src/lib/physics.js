@@ -13,6 +13,9 @@ const DEFAULTS = Object.freeze({
   strength: 5.5,
   technique: 5.5,
 })
+const VARIATION_BANDS = Object.freeze([
+  [10, 0.1], [11, 0.2], [12, 0.3], [13, 0.4], [14, 0.6], [15, 0.8], [16, 1],
+])
 
 function finite(value, fallback) {
   const number = Number(value)
@@ -27,6 +30,21 @@ function attributes(student = {}) {
 // of every valid combination of student attributes, even near the lower bound.
 function softplus(value) {
   return Math.max(value, 0) + Math.log1p(Math.exp(-Math.abs(value)))
+}
+
+function variationLimit(seconds) {
+  if (seconds <= VARIATION_BANDS[0][0]) return VARIATION_BANDS[0][1]
+  const last = VARIATION_BANDS.at(-1)
+  if (seconds >= last[0]) return last[1]
+  for (let index = 1; index < VARIATION_BANDS.length; index++) {
+    const [upperTime, upperLimit] = VARIATION_BANDS[index]
+    const [lowerTime, lowerLimit] = VARIATION_BANDS[index - 1]
+    if (seconds <= upperTime) {
+      const progress = (seconds - lowerTime) / (upperTime - lowerTime)
+      return lowerLimit + (upperLimit - lowerLimit) * progress
+    }
+  }
+  return last[1]
 }
 
 export function predict100(student) {
@@ -48,11 +66,16 @@ function raceTime(student, random) {
   const a = attributes(student)
   const baseline = finite(student?.baseline100, predict100(student))
   const currentBest = finite(student?.best100, baseline)
-  // Ordinary form stays close to the estimate: three samples produce a
-  // triangular variation bounded to ±0.10 s. This keeps a 10.50 s runner's
-  // usual results near 10.4–10.6 instead of letting noise create huge PB jumps.
-  const variation = (random() + random() + random() - 1.5) * (0.20 / 3)
   const explosivePotential = (a.explosiveness - 1) / 9
+  const formControl = (a.endurance + a.stamina + a.strength + a.technique) / 4
+  const instability = Math.max(0, Math.min(1, (10 - formControl) / 9))
+  const largeSwingChance = 0.10 + 0.20 * explosivePotential + 0.20 * instability
+  const attributeScale = 0.80 + 0.20 * instability + 0.40 * explosivePotential
+  const swingScale = random() < largeSwingChance ? 1 : 0.30
+  const amplitude = variationLimit(baseline) * attributeScale * swingScale
+  // Three samples keep ordinary results clustered around the estimate while
+  // respecting the individual amplitude envelope for this runner's pace.
+  const variation = (random() + random() + random() - 1.5) * (2 * amplitude / 3)
   const pace = Math.min(baseline, currentBest)
   const remainingHeadroom = Math.max(0, Math.min(1, (pace - 10) / 6))
   const paceDifficulty = remainingHeadroom * remainingHeadroom
