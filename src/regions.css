@@ -37,11 +37,13 @@
 .regional-summary .wind-tree-leaf > strong { font-size: 14px; }
 .regional-summary .wind-tree-leaf > span > strong { font-size: 12px; }
 .regional-summary .wind-tree-leaf > span > strong > small { display: block; font-size: 10px; color: #7e795c; }
-.regional-summary .wind-tree-node { width: 222px; height: 140px; padding: 8px; }
+.regional-summary .wind-tree-node { width: 222px; height: 140px; }
+.regional-summary .wind-tree-node-select { padding: 8px; }
+.regional-summary .wind-tree-node-fold { top: -8px; right: -8px; }
 .regional-summary .wind-tree-place { min-height: 36px; gap: 6px; }
 .regional-summary .wind-tree-place-name strong { font-size: 13px; }
 .regional-summary .wind-tree-place-name small { font-size: 10px; line-height: 1.2; }
-.regional-summary .wind-tree-node.champion { border-color: #b74334; background: #ffe6b6; }
+.regional-summary .wind-tree-node-select.champion { border-color: #b74334; background: #ffe6b6; }
 .wind-tree-crown.wind-prince-badge { color: #ffe29a; background: #b53030; border-color: #8b2525; }
 .regional-summary .wind-bracket-heading { gap: 12px; flex-wrap: wrap; }
 .regional-summary .wind-bracket-heading > div:first-child { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }

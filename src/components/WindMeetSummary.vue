@@ -10,7 +10,16 @@ const props = defineProps({
 })
 defineEmits(['back'])
 const treeExpanded = ref(true)
-watch(() => props.meet.id, () => { treeExpanded.value = true })
+const collapsedNodeIds = ref(new Set())
+watch(() => props.meet.id, () => { treeExpanded.value = true; collapsedNodeIds.value = new Set() })
+function toggleNode(id) {
+  const next = new Set(collapsedNodeIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  collapsedNodeIds.value = next
+}
+function collapseWholeTree() { treeExpanded.value = false }
+function expandWholeTree() { treeExpanded.value = true; collapsedNodeIds.value = new Set() }
 const gradeLabel = grade => ['一年級', '二年級', '三年級'][grade - 1]
 const NODE_HEIGHT = 116
 const LEAF_HEIGHT = 92
@@ -36,7 +45,7 @@ function finishersFor(match) {
   return []
 }
 
-function buildTree(group) {
+function buildTree(group, collapsedIds) {
   const nodeHeight = regional.value ? 140 : NODE_HEIGHT
   const leafHeight = regional.value ? 128 : LEAF_HEIGHT
   const rowGap = regional.value ? 182 : ROW_GAP
@@ -57,14 +66,10 @@ function buildTree(group) {
     if (entrants.length > 1 && !regional.value) counts.push(1) // School selections have a separate three-runner final.
   }
   const roundCount = counts.length
-  const width = Math.max(320, GUTTER + entrants.length * slotWidth + 20)
-  const leafY = TOP + roundCount * rowGap
-  const height = leafY + leafHeight / 2 + 24
   const rows = []
   const nodes = []
-  const leaves = entrants.map((entry, index) => {
-    const x = GUTTER + (index + 0.5) * (width - GUTTER - 20) / entrants.length
-    return { id: entry.schoolId || entry.classId, entry, x, y: leafY, left: x - slotWidth / 2, right: x + slotWidth / 2,
+  const leaves = entrants.map(entry => {
+    return { id: entry.schoolId || entry.classId, entry, x: 0, y: 0, left: 0, right: 0, children: [],
       color: getClass(entry.classId || getStudent(entry.studentIds[0])?.classId)?.color || '#c7cfc1',
       students: entry.studentIds.map(getStudent).filter(Boolean).map(student => ({ ...student,
         raceTime: firstRoundTimes.get(student.id) ?? null, firstRoundBye: firstRoundByes.has(student.id) })) }
@@ -79,33 +84,17 @@ function buildTree(group) {
     for (let index = 0; index < count; index++) {
       const match = savedRound?.matches[index]
       const children = previous.slice(index * 2, index * 2 + 2)
-      const left = children[0]?.left ?? GUTTER
-      const right = children.at(-1)?.right ?? left
-      const x = (left + right) / 2
       const topThree = finishersFor(match)
       const firstPlace = match?.status === 'bye' ? null : topThree[0]
       const champion = Boolean(group.champion && roundIndex === roundCount - 1)
       const node = {
         id: match?.id || `${group.grade}-${roundIndex}-${index}`,
-        match, x, y, left, right, champion,
+        match, x: 0, y, left: 0, right: 0, champion, roundIndex, children,
         status: match?.status || 'pending',
         topThree,
         firstPlace,
-        style: {
-          left: `${x / width * 100}%`, top: `${y}px`,
-          '--class-color': getClass(firstPlace?.classId || match?.winnerClassId)?.color || '#c7cfc1',
-        },
         description: `${regional.value ? props.meet.city : gradeLabel(group.grade)} · 第 ${roundIndex + 1} 輪${match?.classNames?.length ? ' · ' + match.classNames.join(' 對 ') : ''}`,
       }
-      const jointY = children.length ? (children[0].y + y) / 2 : y
-      for (const child of children) {
-        links.push({ id: `${child.id}-${node.id}`,
-          path: `M ${child.x} ${child.y - (child.entry ? leafHeight : nodeHeight) / 2} V ${jointY} H ${x}`,
-          advanced: ['done', 'bye'].includes(match?.status) })
-      }
-      if (children.length) links.push({ id: `${node.id}-stem`,
-        path: `M ${x} ${jointY} V ${y + nodeHeight / 2}`,
-        advanced: ['done', 'bye'].includes(match?.status) })
       rowNodes.push(node)
       nodes.push(node)
     }
@@ -113,15 +102,80 @@ function buildTree(group) {
     previous = rowNodes
   })
 
+  const roots = previous
+  const visibleNodes = []
+  const visibleLeaves = []
+  let slotCount = 0
+  const leafY = TOP + roundCount * rowGap
+  const hiddenDescendantCount = item => item.children.reduce((count, child) =>
+    count + 1 + (child.entry ? 0 : hiddenDescendantCount(child)), 0)
+  function allocateSlot(item) {
+    item.x = GUTTER + (slotCount + 0.5) * slotWidth
+    item.left = item.x - slotWidth / 2
+    item.right = item.x + slotWidth / 2
+    slotCount++
+  }
+  function layoutItem(item) {
+    if (item.entry) {
+      allocateSlot(item)
+      item.y = leafY
+      visibleLeaves.push(item)
+      return item
+    }
+    item.folded = collapsedIds.has(item.id) && item.children.length > 0
+    if (item.folded) {
+      item.hiddenCount = hiddenDescendantCount(item)
+      allocateSlot(item)
+    } else if (item.children.length) {
+      const children = item.children.map(layoutItem)
+      item.left = children[0].left
+      item.right = children.at(-1).right
+      item.x = (item.left + item.right) / 2
+    } else {
+      allocateSlot(item)
+    }
+    visibleNodes.push(item)
+    return item
+  }
+  roots.forEach(layoutItem)
+
+  const width = Math.max(320, GUTTER + slotCount * slotWidth + 20)
+  for (const node of visibleNodes) node.style = {
+    left: `${node.x / width * 100}%`, top: `${node.y}px`,
+    '--class-color': getClass(node.firstPlace?.classId || node.match?.winnerClassId)?.color || '#c7cfc1',
+  }
+  const maxVisibleY = Math.max(TOP, ...visibleNodes.map(node => node.y + nodeHeight / 2),
+    ...visibleLeaves.map(leaf => leaf.y + leafHeight / 2))
+  const height = maxVisibleY + 24
+  const visibleRoundIndexes = new Set(visibleNodes.map(node => node.roundIndex))
+  for (const round of rows) round.visible = visibleRoundIndexes.has(round.number - 1)
+
+  function createLinks(node) {
+    if (node.folded) return
+    const children = node.children
+    if (!children.length) return
+    const jointY = (children[0].y + node.y) / 2
+    for (const child of children) {
+      links.push({ id: `${child.id}-${node.id}`,
+        path: `M ${child.x} ${child.y - (child.entry ? leafHeight : nodeHeight) / 2} V ${jointY} H ${node.x}`,
+        advanced: ['done', 'bye'].includes(node.match?.status) })
+    }
+    links.push({ id: `${node.id}-stem`,
+      path: `M ${node.x} ${jointY} V ${node.y + nodeHeight / 2}`,
+      advanced: ['done', 'bye'].includes(node.match?.status) })
+    for (const child of children) if (!child.entry) createLinks(child)
+  }
+  roots.forEach(createLinks)
+
   return {
-    width, height, rows, nodes, leaves, links,
-    rootStyle: { left: `${previous[0].x / width * 100}%` },
+    width, height, rows: rows.filter(row => row.visible), nodes: visibleNodes, leaves: visibleLeaves, links,
+    rootStyle: { left: `${roots[0].x / width * 100}%` },
     style: { minWidth: `${width}px`, height: `${height}px` },
   }
 }
 
 const grades = computed(() => props.meet.grades.filter(group => group.entrants.length)
-  .map(group => ({ ...group, tree: buildTree(group) })))
+  .map(group => ({ ...group, tree: buildTree(group, collapsedNodeIds.value) })))
 </script>
 
 <template>
@@ -142,7 +196,7 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
 
     <section v-if="meet.friendly" class="panel region-friendly-summary"><div v-for="match in friendlyResults" :key="match.id" class="region-friendly-heat"><h2>第 {{ match.number }} 組</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>學生</th><th>學校 / 班級</th><th>秒數</th></tr></thead><tbody><tr v-for="(result, index) in match.results" :key="result.studentId"><td>{{ index + 1 }}</td><td><button class="text-button" @click="game.studentId = result.studentId">{{ result.name }}</button></td><td>{{ result.schoolName }} / {{ result.className }}</td><td class="mono">{{ timeText(result.time) }}s</td></tr></tbody></table></div></div></section>
     <section v-for="group in meet.friendly ? [] : grades" :key="group.grade" class="panel wind-grade-summary">
-      <div class="section-title wind-bracket-heading"><div><h2>{{ regional ? '風速王子爭奪戰' : gradeLabel(group.grade) }}</h2><span class="muted">{{ group.entrants.length }} {{ regional ? '所學校' : '個班級' }}</span></div><div v-if="regional" class="wind-tree-controls" role="group" aria-label="樹狀歷程顯示方式"><button class="btn secondary" :disabled="!treeExpanded" @click="treeExpanded = false">全部摺疊</button><button class="btn secondary" :disabled="treeExpanded" @click="treeExpanded = true">全部展開</button></div></div>
+      <div class="section-title wind-bracket-heading"><div><h2>{{ regional ? '風速王子爭奪戰' : gradeLabel(group.grade) }}</h2><span class="muted">{{ group.entrants.length }} {{ regional ? '所學校' : '個班級' }}</span></div><div v-if="regional" class="wind-tree-controls" role="group" aria-label="樹狀歷程顯示方式"><button class="btn secondary" :disabled="!treeExpanded" @click="collapseWholeTree">全部摺疊</button><button class="btn secondary" :disabled="treeExpanded && collapsedNodeIds.size === 0" @click="expandWholeTree">全部展開</button></div></div>
       <div v-if="regional && !treeExpanded" class="wind-tree-collapsed" role="status"><Icon name="flag" :size="19" /><span>淘汰歷程已摺疊</span><strong v-if="group.champion">風速王子：{{ group.champion.name }} · {{ timeText(group.champion.time) }} 秒</strong><strong v-else>比賽進行中 · {{ meet.completedMatches }} / {{ meet.totalMatches }} 場</strong></div>
       <div v-else class="wind-tree-viewport" tabindex="0" role="region" :aria-label="`${regional ? meet.city : gradeLabel(group.grade)}淘汰樹，第一輪在下方，冠軍在上方`">
         <div class="wind-tree" :style="group.tree.style">
@@ -157,20 +211,23 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
             <span v-for="student in leaf.students" :key="student.id"><strong><small v-if="regional">{{ getClass(student.classId)?.name }} </small>{{ student.name }}</strong><small v-if="student.raceTime !== null" class="mono">{{ timeText(student.raceTime) }}s</small><small v-else-if="student.firstRoundBye">輪空</small></span>
           </article>
 
-          <button
+          <div
             v-for="node in group.tree.nodes" :key="node.id"
-            class="wind-tree-node" :class="{ champion: node.champion, bye: node.status === 'bye', pending: node.status === 'pending' }"
-              :style="node.style" :disabled="node.status === 'bye' || !node.firstPlace?.studentId"
-            :title="`${node.description} · ${node.topThree.map(result => [result.schoolName, result.className, result.name, result.time != null ? timeText(result.time) + 's' : ''].filter(Boolean).join(' ')).join('，')}`" :aria-label="`${node.description} · ${node.topThree.map((result, index) => `${index + 1}名 ${result.schoolName || ''} ${result.className} ${result.name}${result.time != null ? ' ' + timeText(result.time) + ' 秒' : ''}`).join('，')}`"
-            @click="game.studentId = node.firstPlace.studentId"
+            class="wind-tree-node"
+            :style="node.style"
             >
-            <span v-if="node.status === 'bye'" class="wind-tree-bye-label">輪空晉級</span>
-            <span v-else v-for="(result, index) in node.topThree" :key="result.studentId" class="wind-tree-place" :class="{ first: index === 0 }">
-              <i>{{ index + 1 }}</i><span class="wind-tree-place-name"><small v-if="regional" :title="result.schoolName">{{ result.schoolName }}</small><small>{{ result.className }}</small><strong>{{ result.name }}</strong></span>
-              <b v-if="result.time != null" class="mono">{{ timeText(result.time) }}s</b>
-            </span>
-            <span v-if="!node.topThree.length" class="wind-tree-pending-label">等待比賽</span>
-          </button>
+            <button class="wind-tree-node-select" :class="{ champion: node.champion, bye: node.status === 'bye', pending: node.status === 'pending' }" :disabled="node.status === 'bye' || !node.firstPlace?.studentId"
+              :title="`${node.description} · ${node.topThree.map(result => [result.schoolName, result.className, result.name, result.time != null ? timeText(result.time) + 's' : ''].filter(Boolean).join(' ')).join('，')}`" :aria-label="`${node.description} · ${node.topThree.map((result, index) => `${index + 1}名 ${result.schoolName || ''} ${result.className} ${result.name}${result.time != null ? ' ' + timeText(result.time) + ' 秒' : ''}`).join('，')}`"
+              @click="node.firstPlace?.studentId && (game.studentId = node.firstPlace.studentId)">
+              <span v-if="node.status === 'bye'" class="wind-tree-bye-label">輪空晉級</span>
+              <span v-else v-for="(result, index) in node.topThree" :key="result.studentId" class="wind-tree-place" :class="{ first: index === 0 }">
+                <i>{{ index + 1 }}</i><span class="wind-tree-place-name"><small v-if="regional" :title="result.schoolName">{{ result.schoolName }}</small><small>{{ result.className }}</small><strong>{{ result.name }}</strong></span>
+                <b v-if="result.time != null" class="mono">{{ timeText(result.time) }}s</b>
+              </span>
+              <span v-if="!node.topThree.length" class="wind-tree-pending-label">等待比賽</span>
+            </button>
+            <button v-if="node.children.length" class="wind-tree-node-fold" :aria-expanded="!node.folded" :aria-label="`${node.folded ? '展開' : '摺疊'}${node.description}下方分支`" :title="node.folded ? `展開分支（${node.hiddenCount} 個項目）` : '摺疊下方分支'" @click="toggleNode(node.id)">{{ node.folded ? '+' : '−' }}</button>
+          </div>
         </div>
       </div>
     </section>
