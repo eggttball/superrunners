@@ -43,6 +43,13 @@
 .regional-summary .wind-tree-place-name small { font-size: 10px; line-height: 1.2; }
 .regional-summary .wind-tree-node.champion { border-color: #b74334; background: #ffe6b6; }
 .wind-tree-crown.wind-prince-badge { color: #ffe29a; background: #b53030; border-color: #8b2525; }
+.regional-summary .wind-bracket-heading { gap: 12px; flex-wrap: wrap; }
+.regional-summary .wind-bracket-heading > div:first-child { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+.regional-summary .wind-tree-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.regional-summary .wind-tree-controls .btn { min-height: 34px; padding: 6px 11px; font-size: 12px; }
+.regional-summary .wind-tree-controls .btn:disabled { opacity: .55; cursor: default; }
+.regional-summary .wind-tree-collapsed { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 14px; padding: 12px 14px; border: 1px dashed #c89b62; border-radius: 5px; background: #fff5db; color: #8a431d; font-size: 13px; }
+.regional-summary .wind-tree-collapsed strong { margin-left: auto; color: #a23c32; }
 .regional-runner-school { max-width: 100%; padding: 0 3px; overflow: hidden; text-overflow: ellipsis; }
 .region-friendly-summary { padding: 22px; }
 .region-friendly-heat + .region-friendly-heat { margin-top: 24px; }
@@ -51,4 +58,5 @@
   .region-picker, .region-school-panel { padding: 16px; }
   .region-school-panel h2 { font-size: 20px; }
   .regional-school-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .regional-summary .wind-tree-collapsed strong { width: 100%; margin-left: 29px; }
 }

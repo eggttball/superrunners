@@ -1,5 +1,5 @@
 <script setup vapor>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { game, getClass, getStudent, getWindTitle, timeText, dateText } from '../lib/game.js'
 import Icon from './Icon.vue'
 
@@ -9,6 +9,8 @@ const props = defineProps({
   backLabel: { type: String, default: '回比賽選單' },
 })
 defineEmits(['back'])
+const treeExpanded = ref(true)
+watch(() => props.meet.id, () => { treeExpanded.value = true })
 const gradeLabel = grade => ['一年級', '二年級', '三年級'][grade - 1]
 const NODE_HEIGHT = 116
 const LEAF_HEIGHT = 92
@@ -140,8 +142,9 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
 
     <section v-if="meet.friendly" class="panel region-friendly-summary"><div v-for="match in friendlyResults" :key="match.id" class="region-friendly-heat"><h2>第 {{ match.number }} 組</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>學生</th><th>學校 / 班級</th><th>秒數</th></tr></thead><tbody><tr v-for="(result, index) in match.results" :key="result.studentId"><td>{{ index + 1 }}</td><td><button class="text-button" @click="game.studentId = result.studentId">{{ result.name }}</button></td><td>{{ result.schoolName }} / {{ result.className }}</td><td class="mono">{{ timeText(result.time) }}s</td></tr></tbody></table></div></div></section>
     <section v-for="group in meet.friendly ? [] : grades" :key="group.grade" class="panel wind-grade-summary">
-      <div class="section-title"><h2>{{ regional ? '風速王子爭奪戰' : gradeLabel(group.grade) }}</h2><span class="muted">{{ group.entrants.length }} {{ regional ? '所學校' : '個班級' }}</span></div>
-      <div class="wind-tree-viewport" tabindex="0" role="region" :aria-label="`${regional ? meet.city : gradeLabel(group.grade)}淘汰樹，第一輪在下方，冠軍在上方`">
+      <div class="section-title wind-bracket-heading"><div><h2>{{ regional ? '風速王子爭奪戰' : gradeLabel(group.grade) }}</h2><span class="muted">{{ group.entrants.length }} {{ regional ? '所學校' : '個班級' }}</span></div><div v-if="regional" class="wind-tree-controls" role="group" aria-label="樹狀歷程顯示方式"><button class="btn secondary" :disabled="!treeExpanded" @click="treeExpanded = false">全部摺疊</button><button class="btn secondary" :disabled="treeExpanded" @click="treeExpanded = true">全部展開</button></div></div>
+      <div v-if="regional && !treeExpanded" class="wind-tree-collapsed" role="status"><Icon name="flag" :size="19" /><span>淘汰歷程已摺疊</span><strong v-if="group.champion">風速王子：{{ group.champion.name }} · {{ timeText(group.champion.time) }} 秒</strong><strong v-else>比賽進行中 · {{ meet.completedMatches }} / {{ meet.totalMatches }} 場</strong></div>
+      <div v-else class="wind-tree-viewport" tabindex="0" role="region" :aria-label="`${regional ? meet.city : gradeLabel(group.grade)}淘汰樹，第一輪在下方，冠軍在上方`">
         <div class="wind-tree" :style="group.tree.style">
           <svg class="wind-tree-links" :viewBox="`0 0 ${group.tree.width} ${group.tree.height}`" preserveAspectRatio="none" aria-hidden="true">
             <path v-for="link in group.tree.links" :key="link.id" :d="link.path" :class="{ advanced: link.advanced }" />
