@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { game, getClass, getStudent, getSchool, getWindTitle, timeText, dateText } from '../lib/game.js'
 import Icon from './Icon.vue'
+import { nationalPodiumLabel } from '../lib/national-championship.js'
 
 const props = defineProps({
   meet: Object,
@@ -209,7 +210,7 @@ const grades = computed(() => props.meet.grades.filter(group => group.entrants.l
 
     <section v-if="national && meet.grades[0].podium?.length" class="panel national-final-summary">
       <div class="section-title"><h2><Icon name="trophy" :size="22" />全國總冠軍賽成績</h2><span class="muted">{{ meet.friendly ? '友誼賽 · 不列入正式紀錄' : '前六名列入個人榮譽紀錄' }}</span></div>
-      <div class="national-final-results"><button v-for="result in meet.grades[0].podium" :key="result.studentId" class="national-final-result" :class="{ winner: result.place === 1 }" @click="game.studentId = result.studentId"><b>{{ result.place === 1 ? meet.friendly ? '冠軍' : '風神' : '第 ' + result.place + ' 名' }}</b><span><strong>{{ result.name }}</strong><small>{{ result.city }} · {{ result.schoolName }} · {{ result.className }}</small></span><strong class="mono">{{ timeText(result.time) }}s</strong></button></div>
+      <div class="national-final-results"><button v-for="result in meet.grades[0].podium" :key="result.studentId" class="national-final-result" :class="{ winner: result.place === 1 }" @click="game.studentId = result.studentId"><b>{{ nationalPodiumLabel(result.place, meet.friendly) }}</b><span><strong>{{ result.name }}</strong><small>{{ result.city }} · {{ result.schoolName }} · {{ result.className }}</small></span><strong class="mono">{{ timeText(result.time) }}s</strong></button></div>
     </section>
 
     <section v-if="regional && meet.friendly" class="panel region-friendly-summary"><div v-for="match in friendlyResults" :key="match.id" class="region-friendly-heat"><h2>第 {{ match.number }} 組</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>學生</th><th>學校 / 班級</th><th>秒數</th></tr></thead><tbody><tr v-for="(result, index) in match.results" :key="result.studentId"><td>{{ index + 1 }}</td><td><button class="text-button" @click="game.studentId = result.studentId">{{ result.name }}</button></td><td>{{ result.schoolName }} / {{ result.className }}</td><td class="mono">{{ timeText(result.time) }}s</td></tr></tbody></table></div></div></section>

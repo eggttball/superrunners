@@ -1,5 +1,10 @@
 import { createRepresentativeRound, normalizeRegion } from './regional-selection.js'
 
+export function nationalPodiumLabel(place, friendly = false) {
+  if (place === 1) return friendly ? '冠軍' : '風神'
+  return ({ 2: '亞軍', 3: '季軍', 4: '殿軍' })[place] || `第 ${place} 名`
+}
+
 // Select one complete regional edition, never mix podium members from different finals.
 export function regionalDelegation(city, meets, getStudent, getSchool) {
   city = normalizeRegion(city)
