@@ -1,8 +1,7 @@
 <script setup vapor>
 import { computed, reactive, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { game, getSchool, getClass, getStudent, admitStudent, timeText } from '../lib/game.js'
-import { admissionDetails, STUDENT_ABILITIES, STUDENT_LIMITS } from '../lib/student-admission.js'
-import { predict100 } from '../lib/physics.js'
+import { admissionDetails, estimateAdmission, STUDENT_ABILITIES, STUDENT_LIMITS } from '../lib/student-admission.js'
 import { syncState } from '../lib/cloud.js'
 import { COUNTIES } from '../lib/school-order.js'
 import PixelRunner from './PixelRunner.vue'
@@ -20,6 +19,7 @@ const grade = ref(getClass(props.classId)?.grade || 1)
 const classId = ref(props.classId)
 const form = reactive({ name: '', nickname: '', gender: '男', age: 11 + grade.value,
   height: 160, weight: 50, explosiveness: 6, strength: 6, technique: 6, endurance: 6, stamina: 6, isSchoolTeam: false })
+Object.assign(form, { estimateMode: 'attributes', estimateMinimum: '', estimateMaximum: '' })
 const schools = computed(() => game.world.schools.filter(school => normalizeCity(school.city) === city.value))
 const school = computed(() => { game.revision; return getSchool(schoolId.value) })
 const classes = computed(() => { game.revision; return school.value?.classes.filter(cls => cls.grade === grade.value) || [] })
@@ -29,9 +29,12 @@ const destination = computed(() => {
   try { return { ...admissionDetails(school.value, classroom.value, getStudent), error: '' } }
   catch (cause) { return { studentNumber: '', error: cause.message } }
 })
-const estimate = computed(() => Math.max(10.01, Math.round(predict100({ ...form, grade: grade.value }) * 100) / 100))
+const estimate = computed(() => {
+  try { return { ...estimateAdmission(form, grade.value), error: '' } }
+  catch (cause) { return { mode: form.estimateMode, error: cause.message } }
+})
 const online = ref(navigator.onLine)
-const canSave = computed(() => !saving.value && syncState.ready && online.value && !destination.value.error)
+const canSave = computed(() => !saving.value && syncState.ready && online.value && !destination.value.error && !estimate.value.error)
 const gradeLabels = ['一年級', '二年級', '三年級']
 const previousFocus = document.activeElement
 let previousOverflow = ''
@@ -102,14 +105,24 @@ onUnmounted(() => {
             <label v-for="(limit, key) in STUDENT_LIMITS" :key="key">{{ limit.label }} <small>{{ limit.unit }}</small><input v-model.number="form[key]" type="number" required :min="limit.min" :max="limit.max" :step="limit.step" inputmode="decimal" /></label>
           </div>
         </section>
+        <section class="create-section"><h3><Icon name="clock" :size="18" />預估百米</h3>
+          <label class="estimate-mode-field">預估方式<select v-model="form.estimateMode"><option value="attributes">依身體條件與能力推算</option><option value="range">自行指定秒數區間</option></select></label>
+          <div v-if="form.estimateMode === 'range'" class="create-grid estimate-range-fields">
+            <label>最快秒數<input v-model.number="form.estimateMinimum" type="number" min="10.01" max="30" step="0.01" required inputmode="decimal" placeholder="填寫秒數" /></label>
+            <label>最慢秒數<input v-model.number="form.estimateMaximum" type="number" min="10.01" max="30" step="0.01" required inputmode="decimal" placeholder="填寫秒數" /></label>
+          </div>
+          <p v-if="estimate.error" class="inline-error" role="alert">{{ estimate.error }}</p>
+          <p v-else class="estimate-help">{{ form.estimateMode === 'range' ? '新增時會在區間內抽取並保存一個預估基準；實際比賽仍會依能力產生波動。' : '依學生的身體資料與五項能力推算預估基準。' }}</p>
+        </section>
         <section class="create-section"><h3><Icon name="bolt" :size="18" />跑者能力 <small>1～10</small></h3>
           <div class="create-abilities"><div v-for="ability in STUDENT_ABILITIES" :key="ability.key" class="create-ability"><label :for="`create-${ability.key}`">{{ ability.label }}</label><div class="create-meter" aria-hidden="true"><i v-for="level in 10" :key="level" :class="{ filled: level <= form[ability.key], medium: level >= 7 && level <= 8, high: level >= 9 }"></i></div><input :id="`create-${ability.key}`" v-model.number="form[ability.key]" type="number" required min="1" max="10" step="1" inputmode="numeric" /></div></div>
         </section>
         <label class="create-team"><input v-model="form.isSchoolTeam" type="checkbox" /><Icon name="sprint" :size="22" /><span>加入學校田徑隊</span></label>
       </fieldset>
-      <aside class="create-preview" aria-label="新增學生預覽"><PixelRunner :seed="destination.studentNumber || creationId" :gender="form.gender" :height="form.height" :weight="form.weight" :color="classroom?.color || '#e87560'" :size="84" /><div><strong>{{ form.name.trim() || '新跑者' }}<small v-if="form.nickname.trim()">{{ form.nickname.trim() }}</small></strong><p>{{ classroom ? `${school?.name} · ${classroom.name}` : '選擇班級，穿上班服' }}</p><span class="mono">{{ destination.studentNumber || '學號自動產生' }}</span></div><div class="create-estimate"><span>預估百米</span><b>{{ timeText(estimate) }}<small>s</small></b></div></aside>
-      <p class="create-note">學號依班級空位產生，百米預估依身體與能力計算；正式比賽後會留下個人最佳。</p>
+      <aside class="create-preview" aria-label="新增學生預覽"><PixelRunner :seed="destination.studentNumber || creationId" :gender="form.gender" :height="form.height" :weight="form.weight" :color="classroom?.color || '#e87560'" :size="84" /><div><strong>{{ form.name.trim() || '新跑者' }}<small v-if="form.nickname.trim()">{{ form.nickname.trim() }}</small></strong><p>{{ classroom ? `${school?.name} · ${classroom.name}` : '選擇班級，穿上班服' }}</p><span class="mono">{{ destination.studentNumber || '學號自動產生' }}</span></div><div class="create-estimate"><span>{{ estimate.mode === 'range' ? '預估區間' : '預估百米' }}</span><b v-if="estimate.mode === 'range' && !estimate.error">{{ timeText(estimate.minimum) }}–{{ timeText(estimate.maximum) }}<small>s</small></b><b v-else>{{ estimate.time ? timeText(estimate.time) : '—' }}<small v-if="estimate.time">s</small></b></div></aside>
+      <p class="create-note">學號依班級空位產生，百米預估依所選方式設定；正式比賽後會留下個人最佳。</p>
       <p v-if="error" class="create-error" role="alert">{{ error }}</p>
+      <p v-else-if="estimate.error" class="create-note" role="status">{{ estimate.error }}</p>
       <p v-else-if="destination.error" class="create-note" role="status">{{ destination.error }}</p>
       <p v-if="!online || !syncState.ready" class="create-note" role="status">新增學生需要連線確認班級名額，請等待雲端連接。</p>
       <footer class="create-footer"><button type="button" class="btn ghost" :disabled="saving" @click="close">取消</button><button type="submit" class="btn primary" :disabled="!canSave"><Icon name="check" :size="18" />{{ saving ? '正在新增…' : '新增並入學' }}</button></footer>
@@ -129,6 +142,11 @@ onUnmounted(() => {
 .create-section { margin-bottom: 22px; }
 .create-section h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; margin: 0 0 12px; }
 .create-section h3 small { margin-left: auto; color: #6c7e89; font-size: 12px; }
+.estimate-mode-field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+.estimate-mode-field select { width: 100%; max-width: 360px; margin-top: 4px; border: 2px solid #9aadb0; background: #fffdf5; color: #243d52; font-size: 14px; }
+.estimate-range-fields { max-width: 420px; margin-top: 12px; }
+.estimate-help, .inline-error { margin: 9px 0 0; color: #617180; font-size: 12px; line-height: 1.6; }
+.inline-error { color: #b54230; }
 .create-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
 .create-grid label { display: block; min-width: 0; font-size: 13px; font-weight: 600; }
 .create-grid small { font-weight: 400; color: #6c7e89; }

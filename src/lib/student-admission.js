@@ -48,12 +48,33 @@ export function validateStudentInput(input) {
   return result
 }
 
+export function estimateAdmission(input, grade) {
+  if (input.estimateMode === 'range') {
+    const minimum = Number(input.estimateMinimum), maximum = Number(input.estimateMaximum)
+    const validHundredths = value => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6
+    if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum < 10.01 || maximum > 30 ||
+      minimum > maximum || !validHundredths(minimum) || !validHundredths(maximum)) {
+      throw new Error('自訂預估區間請設定為 10.01～30.00 秒，且最快秒數不可大於最慢秒數。')
+    }
+    return { mode: 'range', minimum, maximum }
+  }
+  if (input.estimateMode !== 'attributes') throw new Error('請選擇預估成績方式。')
+  const time = Math.max(10.01, Math.round(predict100({ ...input, grade }) * 100) / 100)
+  return { mode: 'attributes', minimum: time, maximum: time, time }
+}
+
 export function buildAdmittedStudent(input, school, classroom, details, creationId) {
   const data = validateStudentInput(input)
+  const estimate = estimateAdmission(input, classroom.grade)
+  const hundredth = value => Math.round(value * 100) / 100
+  const baseline100 = estimate.mode === 'range'
+    ? hundredth(estimate.minimum + Math.floor(Math.random() * (Math.round((estimate.maximum - estimate.minimum) * 100) + 1)) / 100)
+    : estimate.time
   return { ...data, id: details.studentNumber, studentNumber: details.studentNumber,
     schoolId: school.id, classId: classroom.id, grade: classroom.grade, ...details,
     manuallyCreated: true, creationId, createdAt: new Date().toISOString(),
-    baseline100: Math.max(10.01, Math.round(predict100({ ...data, grade: classroom.grade }) * 100) / 100),
+    baseline100, baseline100Mode: estimate.mode,
+    baseline100Min: estimate.minimum, baseline100Max: estimate.maximum,
     best100: null, isCityTeam: false, isNationalTeam: false,
     ranks: { class: 0, grade: 0, school: 0, national: 0 } }
 }

@@ -114,7 +114,7 @@ IndexedDB object store 版本目前為 `5`，原本資料格式 `schemaVersion: 
 
 1. 讀取該班 `admissionSeats`，排除原始及已保留座號，以 `if-match: null_etag` 建立 01～50 的一個空位。學號格式及班級關聯由規則驗證；相同 creationId 可恢復回應遺失的保留結果。
 2. 同一個 IndexedDB transaction 保存學生、學校班級名單、校隊名單及 `student-create` outbox。保存失敗時嘗試釋放尚未建立學生的名額。
-3. 同步器以多路徑 PATCH 新增 `addedStudents` 固定個資（不含 nickname／隊籍／最佳／排名）、初始 profile／roster 與四個成績索引；`admittedAt` 使用 Firebase 伺服器時間。若已存在相同 creationId，表示之前寫入成功，直接確認，避免重試重設後續編輯或成績。
+3. 同步器以多路徑 PATCH 新增 `addedStudents` 固定個資（不含 nickname／隊籍／最佳／排名）、初始 profile／roster 與四個成績索引；固定資料包含 `baseline100`，以及新增學生才有的預估方式和區間欄位 `baseline100Mode`／`baseline100Min`／`baseline100Max`。若採自訂區間，抽取的預估基準和原區間都會保存，其他裝置讀取後會沿用同一基準；`admittedAt` 使用 Firebase 伺服器時間。若已存在相同 creationId，表示之前寫入成功，直接確認，避免重試重設後續編輯或成績。
 4. 本機新增後立即可參賽；若後續寫雲端失敗，保留 outbox 並沿用既有補傳機制。原始 static 快照不改寫，manifest 的 studentCount 只包含原始生成學生。
 
 啟動查詢 `addedStudents` 的 `admittedAt` 索引，自 `admissionCursor - 1000` 毫秒起查詢，保留時間邊界重疊並以 ID 去重；新學生及游標一起保存。全新瀏覽器先驗證原始世界，再合併全部插班生並還原動態欄位。排名／校隊／稱號／比賽歷程讀取如遇本機未知 ID，也只補取該學生的新增個資及動態欄位，不重抓原始全國學生。
