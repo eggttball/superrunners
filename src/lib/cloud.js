@@ -6,7 +6,7 @@ import { CLOUD_SCHEMA, cloudRacePath, emptyDynamicStudent, flagIds, idFlags, put
 import { normalizeRegion } from './regional-selection.js'
 
 export const syncState = shallowReactive({ ready: false, busy: false, pending: 0, error: '', phase: '', progress: 0 })
-let context, drain, retryTimer, mergeLocal, currentWorld
+let context, drain, retryTimer, mergeLocal, currentWorld, lookupStudent
 let operationSequence = 0
 let localGeneration = 0, syncRequested = false
 const inFlightReads = new Map()
@@ -89,7 +89,8 @@ export async function connectCloud(world) {
   progress('確認雲端世界', 0)
   let manifest = await request(path)
   if (!manifest) {
-    const candidate = { worldId, schemaVersion: CLOUD_SCHEMA, state: 'uploading', schoolCount: world.schools.length, studentCount: world.students.length }
+    const candidate = { worldId, schemaVersion: CLOUD_SCHEMA, state: 'uploading', schoolCount: world.schools.length,
+      studentCount: world.students.filter(student => !student.manuallyCreated).length }
     try { await request(path, { method: 'PUT', data: candidate, headers: { 'if-match': 'null_etag' } }); manifest = candidate }
     catch (error) { if (error.status !== 412) throw error; manifest = await request(path) }
   }
@@ -122,6 +123,9 @@ export async function connectCloud(world) {
     if (latest.value?.worldId !== worldId) throw new Error('雲端世界識別已變更，已停止上傳。')
     if (latest.value.state !== 'ready') await request(path, { method: 'PUT', headers: { 'if-match': latest.etag }, data: { ...latest.value, state: 'ready', completedAt: new Date().toISOString() } })
   }
+  // Only admissions are discovered at startup; original school snapshots stay local.
+  const admissions = await readAdmissions(world.admissionCursor || 0)
+  if (mergeLocal) await mergeLocal(admissions)
   progress('雲端已連接', 1)
   syncState.error = ''
   syncState.ready = true
@@ -151,6 +155,14 @@ export async function restoreCloud(onProgress) {
     onProgress({ phase: `從雲端還原學校（${index + 1}/${ids.length}）`, progress: (index + 1) / ids.length * 0.75 })
   }
   if (world.students.length !== manifest.studentCount || await worldIdentity(world) !== manifest.worldId) throw new Error('雲端世界校驗失敗，已停止保存。')
+  const admissions = await readAdmissions(0, false)
+  for (const student of admissions.addedStudents) {
+    const classroom = world.schools.find(school => school.id === student.schoolId)?.classes.find(cls => cls.id === student.classId)
+    if (!classroom || classroom.studentIds.includes(student.id) || classroom.studentIds.length >= 50) throw new Error('雲端插班資料不完整，已停止還原。')
+    classroom.studentIds.push(student.id)
+    world.students.push(student)
+  }
+  world.admissionCursor = admissions.admissionCursor
   // Dynamic state is fetched once for a brand-new local copy; subsequent
   // launches only perform the scoped reads below.
   const bests = await request(`${rootPath()}/dynamic/bests`) || {}
@@ -205,6 +217,23 @@ export function cloudOperation(type, payload) {
 async function sendOperation(operation) {
   if (operation.uid !== context.uid || (operation.worldId && operation.worldId !== context.worldId)) throw new Error('待同步資料屬於另一個帳號或世界，已停止傳送。')
   const { type, payload } = operation
+  if (type === 'student-create') {
+    const { student, teamId } = payload
+    const path = `dynamic/addedStudents/${student.id}`
+    const existing = await request(`${rootPath()}/${path}`)
+    if (existing) {
+      if (existing.creationId !== student.creationId) throw new Error('學號已被其他學生使用，已保留本機資料。')
+      return {} // A lost response must not reset later edits or personal bests.
+    }
+    const patch = {
+      [path]: { ...staticAdmission(student), admittedAt: { '.sv': 'timestamp' } },
+      [`dynamic/profiles/${student.id}`]: { nickname: student.nickname, isCityTeam: false, isNationalTeam: false },
+    }
+    if (student.isSchoolTeam) patch[`dynamic/rosters/${teamId}/${student.id}`] = true
+    putScores(patch, student)
+    await request(rootPath(), { method: 'PATCH', data: patch })
+    return {}
+  }
   if (type === 'patch') {
     await request(rootPath(), { method: 'PATCH', data: payload })
     return {}
@@ -255,9 +284,78 @@ async function sendOperation(operation) {
   }
 }
 
-export function installCloudSync(worldGetter, merger) {
+export function installCloudSync(worldGetter, merger, studentGetter) {
   currentWorld = worldGetter
   mergeLocal = merger
+  lookupStudent = studentGetter
+}
+
+function staticAdmission(student) {
+  const { nickname, isSchoolTeam, isCityTeam, isNationalTeam, best100, ranks, admittedAt, ...fixed } = student
+  return fixed
+}
+
+async function admissionProfiles(fixedStudents) {
+  const schoolIndex = new Map((currentWorld?.().schools || []).map(school => [school.id, school]))
+  return Promise.all(fixedStudents.map(async fixed => {
+    const school = schoolIndex.get(fixed.schoolId)
+    const teamId = school?.teamId || `team-${fixed.schoolId}`
+    const [profile, best100, member] = await Promise.all([
+      request(`${rootPath()}/dynamic/profiles/${fixed.id}`), request(`${rootPath()}/dynamic/bests/${fixed.id}`),
+      request(`${rootPath()}/dynamic/rosters/${teamId}/${fixed.id}`),
+    ])
+    return { ...emptyDynamicStudent(fixed), ...profile, best100: best100 ?? null, isSchoolTeam: !!member }
+  }))
+}
+
+async function readAdmissions(cursor, withProfiles = true) {
+  const records = values(await request(`${rootPath()}/dynamic/addedStudents`, {
+    query: { orderBy: 'admittedAt', startAt: Math.max(0, cursor - 1000) },
+  }))
+  const newStudents = records.filter(student => !lookupStudent?.(student.id))
+  return { addedStudents: withProfiles ? await admissionProfiles(newStudents) : newStudents.map(emptyDynamicStudent),
+    admissionCursor: records.reduce((latest, student) => Math.max(latest, student.admittedAt || 0), cursor) }
+}
+
+async function unknownAdmissions(ids) {
+  const missing = [...new Set(ids)].filter(id => !lookupStudent?.(id))
+  const fixed = (await Promise.all(missing.map(id => request(`${rootPath()}/dynamic/addedStudents/${id}`)))).filter(Boolean)
+  return admissionProfiles(fixed)
+}
+
+function referencedStudents(value, ids = new Set()) {
+  if (!value || typeof value !== 'object') return ids
+  if (typeof value.studentId === 'string') ids.add(value.studentId)
+  if (typeof value.winnerStudentId === 'string') ids.add(value.winnerStudentId)
+  for (const id of values(value.studentIds)) if (typeof id === 'string') ids.add(id)
+  for (const child of Object.values(value)) if (child && typeof child === 'object') referencedStudents(child, ids)
+  return ids
+}
+
+// Seat claims use ETags so two devices cannot assign the same class seat.
+// The claim ID survives a lost response and the eventual outbox retry.
+export async function reserveStudentSeat(school, classroom, detailsFor, creationId) {
+  if (!syncState.ready || !navigator.onLine) throw new Error('新增學生需要連線確認班級名額，請等待雲端連接後再試。')
+  const path = `${rootPath()}/dynamic/admissionSeats/${classroom.id}`
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const reserved = await request(path) || {}
+    const own = Object.entries(reserved).find(([, claim]) => claim?.creationId === creationId)
+    if (own) return { seat: Number(own[0]), studentNumber: own[1].studentNumber, classIndex: own[1].classIndex }
+    const details = detailsFor(reserved)
+    const claim = { creationId, studentNumber: details.studentNumber, studentPrefix: details.studentNumber.slice(0, -2), schoolId: school.id,
+      classId: classroom.id, classIndex: details.classIndex, seat: details.seat, createdAt: Date.now() }
+    try {
+      await request(`${path}/${details.seat}`, { method: 'PUT', headers: { 'if-match': 'null_etag' }, data: claim })
+      return details
+    } catch (error) { if (error.status !== 412) throw error }
+  }
+  throw new Error('班級名額正在更新，請再試一次。')
+}
+
+export async function releaseStudentSeat(classId, seat, creationId) {
+  const path = `${rootPath()}/dynamic/admissionSeats/${classId}/${seat}`
+  const snapshot = await request(path, { etag: true })
+  if (snapshot.value?.creationId === creationId) await request(path, { method: 'DELETE', headers: { 'if-match': snapshot.etag } })
 }
 
 export async function retryCloudSync() {
@@ -316,6 +414,12 @@ async function scopedRead(key, read) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const generation = localGeneration
       const result = await read()
+      // Brackets, titles and podiums can refer to a runner admitted on another
+      // device since startup, just as ranking and team reads can.
+      const known = new Set((result.addedStudents || []).map(student => student.id))
+      const referenced = [...referencedStudents(result)].filter(id => !known.has(id))
+      const added = await unknownAdmissions(referenced)
+      if (added.length) result.addedStudents = [...(result.addedStudents || []), ...added]
       const stillCurrent = () => localGeneration === generation
       if (!stillCurrent()) continue
       const applied = await mergeLocal({ ...result, stillCurrent, cache: { id: key, updatedAt: new Date().toISOString(), data: result } })
@@ -332,7 +436,7 @@ export function fetchRanking(scope, { schoolId, classId, grade } = {}) {
   return scopedRead(`ranking:${path}`, async () => {
     const scores = await request(`${rootPath()}/rankings/${path}`, { query: { orderBy: 'time', ...(scope === 'national' ? { limitToFirst: 300 } : {}) } })
     if (!scores) throw new Error('雲端尚無此範圍的排名資料，目前顯示本機資料。')
-    return { ranking: { scope, entries: sortedScores(scores) } }
+    return { addedStudents: await unknownAdmissions(Object.keys(scores)), ranking: { scope, entries: sortedScores(scores) } }
   })
 }
 
@@ -354,7 +458,7 @@ export function fetchTeam(team) {
       const [profile, best100] = await Promise.all([request(`${rootPath()}/dynamic/profiles/${id}`), request(`${rootPath()}/dynamic/bests/${id}`)])
       return { id, nickname: '', isCityTeam: false, isNationalTeam: false, ...profile, best100: best100 ?? null }
     }))
-    return { roster: { teamId: team.id, memberIds, awardIds: flagIds(awardIds) }, profiles, awards: values(awards), schoolChampions: { schoolId: team.schoolId, champions: champions || {} },
+    return { addedStudents: await unknownAdmissions(memberIds), roster: { teamId: team.id, memberIds, awardIds: flagIds(awardIds) }, profiles, awards: values(awards), schoolChampions: { schoolId: team.schoolId, champions: champions || {} },
       regionChampions: { [city]: prince || null } }
   })
 }

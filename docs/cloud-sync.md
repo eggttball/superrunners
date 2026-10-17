@@ -18,7 +18,7 @@
 
 1. 完成 Firebase Auth 登入狀態確認。
 2. Worker 讀取 IndexedDB；啟動時也會申請瀏覽器持久化儲存，避免大型固定資料被自動回收。
-3. 本機已有資料：直接使用本機固定資料，僅讀小型雲端 `manifest` 確認世界並處理待同步動作。
+3. 本機已有資料：直接使用本機固定資料，讀小型雲端 `manifest` 確認世界，以 `admissionCursor` 查詢增量插班生，並處理待同步動作；不重新下載原始固定資料。
 4. 本機沒有資料：先確認雲端已初始化，再逐校下載固定資料，載入動態狀態與既有成績，寫入 IndexedDB；完成後才開始操作。
 5. 日常遊玩只在下表的操作發生時讀取相關動態資料。不訂閱全國資料或排名根節點，不背景輪詢全部世界。
 
@@ -62,6 +62,8 @@ users/{uid}/
         followedTeamIds/{teamId}: true
       rosters/{teamId}/{studentId}: true
       profiles/{studentId}/       nickname、isCityTeam、isNationalTeam
+      addedStudents/{studentId}   手動新增學生的固定資料及 admittedAt
+      admissionSeats/{classId}/{seat}  跨裝置保留學號及空位
       bests/{studentId}: 14.21
       races/{schoolId}/{raceId}
       awards/{schoolId}/{awardId}
@@ -84,7 +86,7 @@ users/{uid}/
 
 尚未有實際成績時，排名 `time` 為固定 `baseline100`，`best100` 在 RTDB 中省略，還原為本機 `null`。RTDB 不保留空陣列／空物件，讀取時會轉回本機所需的空陣列。
 
-`worldId` 為世界 schema、seed、建立時間、學校數及學生數的 SHA-256。它是世界身份識別，並非完整內容的校驗雜湊。`manifest` 以 ETag 條件寫入確保只有一個世界取得首次上傳位置；條件寫入保留一般回應，不搭配 RTDB 不支援的 `print=silent`，批次 PATCH 則使用靜默回應節省流量。`static` 只能在上傳期間建立，一旦存在就不允許覆寫。
+`worldId` 為世界 schema、seed、建立時間、學校數及原始生成學生數（不含插班生）的 SHA-256。它是世界身份識別，並非完整內容的校驗雜湊。`manifest` 以 ETag 條件寫入確保只有一個世界取得首次上傳位置；條件寫入保留一般回應，不搭配 RTDB 不支援的 `print=silent`，批次 PATCH 則使用靜默回應節省流量。`static` 只能在上傳期間建立，一旦存在就不允許覆寫。
 
 ## 寫入、斷線與重試
 
@@ -105,6 +107,21 @@ IndexedDB object store 版本目前為 `5`，原本資料格式 `schemaVersion: 
 每組百米比賽上傳前僅取得該組最多八人的雲端最佳，取較快值後，以一個多路徑 PATCH 同步寫入賽事、個人最佳、四種排名，以及當組完成全班時的獎牌。規則不允許既有最佳變慢；若別台裝置搶先改善成績，整個 PATCH 會被拒絕，前端重讀最佳後重試。固定的 raceId／awardId 讓回應遺失後的重傳不會增加重複紀錄。
 
 讀取結果會經過本機交易佇列，並保留尚未上傳的本機修改。若讀取期間發生新的本機操作，會重新讀取，避免舊回應覆蓋剛編輯的內容。
+
+## 手動插班生
+
+「新增學生」先連線保留班級座號，再保存本機：
+
+1. 讀取該班 `admissionSeats`，排除原始及已保留座號，以 `if-match: null_etag` 建立 01～50 的一個空位。學號格式及班級關聯由規則驗證；相同 creationId 可恢復回應遺失的保留結果。
+2. 同一個 IndexedDB transaction 保存學生、學校班級名單、校隊名單及 `student-create` outbox。保存失敗時嘗試釋放尚未建立學生的名額。
+3. 同步器以多路徑 PATCH 新增 `addedStudents` 固定個資（不含 nickname／隊籍／最佳／排名）、初始 profile／roster 與四個成績索引；`admittedAt` 使用 Firebase 伺服器時間。若已存在相同 creationId，表示之前寫入成功，直接確認，避免重試重設後續編輯或成績。
+4. 本機新增後立即可參賽；若後續寫雲端失敗，保留 outbox 並沿用既有補傳機制。原始 static 快照不改寫，manifest 的 studentCount 只包含原始生成學生。
+
+啟動查詢 `addedStudents` 的 `admittedAt` 索引，自 `admissionCursor - 1000` 毫秒起查詢，保留時間邊界重疊並以 ID 去重；新學生及游標一起保存。全新瀏覽器先驗證原始世界，再合併全部插班生並還原動態欄位。排名／校隊／稱號／比賽歷程讀取如遇本機未知 ID，也只補取該學生的新增個資及動態欄位，不重抓原始全國學生。
+
+自動賽本機進度保存目前學校完整 queue；重整後不依新增學生重排已啟動賽程。需要從賽事紀錄找回進度時，以紀錄的 `classParticipantIds` 重建，舊紀錄則排除學校開賽後才新增的學生，避免同一組 raceId 重跑不同參賽者或把已完成學校判斷為未完成。
+
+保留名額後、尚未保存本機前關閉網頁，可能留下未使用的保留座號；它不會形成學生，也不會覆蓋別人的資料。成功新增的座號固定保留，不能重配或修改固定個資。`admissionCursor` 不上傳到固定 metadata；JSON 匯出仍包含已合併的新增學生。
 
 ## 部署
 

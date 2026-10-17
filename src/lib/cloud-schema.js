@@ -8,7 +8,9 @@ export const cloudRacePath = race => race.mode === 'national-championship' ? `dy
   : race.mode === 'regional' ? `dynamic/regionRaces/${race.city}/${race.id}` : `dynamic/races/${race.schoolId}/${race.id}`
 
 export async function worldIdentity(world) {
-  const text = JSON.stringify([world.schemaVersion, world.seed, world.createdAt, world.schools.length, world.students.length])
+  // Admissions grow the local population without changing the original world.
+  const studentCount = world.students.reduce((count, student) => count + (student.manuallyCreated ? 0 : 1), 0)
+  const text = JSON.stringify([world.schemaVersion, world.seed, world.createdAt, world.schools.length, studentCount])
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
   return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('')
 }
@@ -29,7 +31,7 @@ export function staticTeam(team) {
 }
 
 export function staticMetadata(world) {
-  const { schools, students, teams, races, awards, windMeets, windChampions, regionMeets, regionChampions, nationalMeets, nationalChampion, nationalHonors, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, exportedAt, ...meta } = world
+  const { schools, students, teams, races, awards, windMeets, windChampions, regionMeets, regionChampions, nationalMeets, nationalChampion, nationalHonors, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, admissionCursor, exportedAt, ...meta } = world
   return meta
 }
 

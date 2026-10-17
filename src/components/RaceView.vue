@@ -369,6 +369,7 @@ async function finishHeat() {
     await recordHeat({
       id: currentHeatId.value, sessionId: sessionId.value, schoolId: current.value.schoolId || selectedSchoolId.value,
       classId: current.value.classId, teamId: current.value.teamId || null,
+      classParticipantIds: current.value.classId ? queue.value.filter(entry => entry.classId === current.value.classId).flatMap(entry => entry.studentIds) : [],
       classIds: current.value.classIds || [], mode: current.value.mode || 'class',
       heat: current.value.heat, startedAt: startedAt.value, finishedAt: finishedAt.value,
       results: results.value.map((student, index) => ({ studentId: student.id, lane: student.lane, time: student.time, place: index + 1 })),

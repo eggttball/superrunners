@@ -1,17 +1,20 @@
 <script setup vapor>
-import { computed, ref, watch } from 'vue'
-import { game, getSchool, getClass, getStudent, getTeam, getSchoolTeamCountForClass, toggleFavorite, toggleFollow, timeText, studentTime, go } from '../lib/game.js'
+import { computed, ref, watch, nextTick } from 'vue'
+import { game, getSchool, getClass, getStudent, getAdmittedStudents, getTeam, getSchoolTeamCountForClass, toggleFavorite, toggleFollow, timeText, studentTime, go } from '../lib/game.js'
 import SchoolPicker from './SchoolPicker.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
 import GamePageHeader from './GamePageHeader.vue'
 import WindTitleBadge from './WindTitleBadge.vue'
+import StudentCreateDialog from './StudentCreateDialog.vue'
 import { fetchRanking, fetchTeam, fetchWindChampions, syncState } from '../lib/cloud.js'
 import { cachedCloudData } from '../lib/storage.js'
 import { useCloudRequest } from '../lib/useCloudRequest.js'
+import { sortedScores } from '../lib/cloud-schema.js'
 
 const { loading: cloudLoading, error: cloudError, updatedAt: cloudUpdatedAt, load: loadCloud } = useCloudRequest()
 const cloudRanking = ref(null)
+const creatingStudent = ref(false)
 
 const grade = ref(1)
 const classId = ref('')
@@ -37,10 +40,22 @@ const selectedClass = computed(() => getClass(classId.value))
 const studentCount = computed(() => school.value?.classes.reduce((sum, cls) => sum + cls.studentIds.length, 0) || 0)
 const rankedStudents = computed(() => {
   game.revision
-  if (cloudRanking.value) return cloudRanking.value.entries.map(entry => {
-    const student = getStudent(entry.id)
-    return student ? { ...student, best100: entry.best100, ranks: { ...student.ranks, [cloudRanking.value.scope]: entry.rank } } : null
-  }).filter(Boolean)
+  if (cloudRanking.value) {
+    const ranking = cloudRanking.value
+    const scores = Object.fromEntries(ranking.entries.map(entry => [entry.id, entry]))
+    // A just-admitted runner stays visible while their initial cloud write is pending.
+    for (const student of getAdmittedStudents()) {
+      const matches = ranking.scope === 'national' || (student.schoolId === game.schoolId &&
+        (ranking.scope === 'school' || (ranking.scope === 'grade' && student.grade === grade.value) ||
+          (ranking.scope === 'class' && student.classId === classId.value)))
+      if (matches && !scores[student.id]) scores[student.id] = { time: studentTime(student), best100: student.best100 }
+    }
+    const entries = sortedScores(scores)
+    return (ranking.scope === 'national' ? entries.slice(0, nationalRankingLimit) : entries).map(entry => {
+      const student = getStudent(entry.id)
+      return student ? { ...student, best100: entry.best100, ranks: { ...student.ranks, [ranking.scope]: entry.rank } } : null
+    }).filter(Boolean)
+  }
   if (!school.value) return []
   if (teamOnly.value) {
     const memberIds = new Set(team.value?.memberIds || [])
@@ -68,6 +83,23 @@ const tableLabel = computed(() => nationalRanking.value ? '全國排名前 300 �
 function toggleTeamRoster() {
   teamOnly.value = !teamOnly.value
   page.value = 1
+}
+
+async function studentCreated(student) {
+  creatingStudent.value = false
+  nationalRanking.value = false
+  game.schoolId = student.schoolId
+  teamOnly.value = false
+  scope.value = 'class'
+  // School/grade watchers establish their defaults before selecting the destination.
+  await nextTick()
+  grade.value = student.grade
+  await nextTick()
+  classId.value = student.classId
+  await nextTick()
+  await refreshRoster()
+  const position = rankedStudents.value.findIndex(entry => entry.id === student.id)
+  page.value = position < 0 ? 1 : Math.floor(position / pageSize) + 1
 }
 
 async function refreshRoster() {
@@ -104,7 +136,7 @@ watch([() => game.schoolId, () => syncState.ready], ([id, ready]) => {
 
 <template>
   <section class="content-view schools-view">
-    <GamePageHeader title="學校資料" caption="CAMPUS MAP" description="逛逛校園，發掘下一位跑道新星。" theme="schools"><span class="badge"><Icon name="globe" :size="15" />臺灣 · {{ game.world.schools.length }} 所學校</span></GamePageHeader>
+    <GamePageHeader title="學校資料" caption="CAMPUS MAP" description="逛逛校園，發掘下一位跑道新星。" theme="schools"><span class="badge"><Icon name="globe" :size="15" />臺灣 · {{ game.world.schools.length }} 所學校</span><button class="btn primary small" @click="creatingStudent = true"><Icon name="user" :size="17" />新增學生</button></GamePageHeader>
     <div class="school-layout">
       <SchoolPicker v-model="game.schoolId" />
       <div v-if="school || nationalRanking" class="panel detail-panel school-detail">
@@ -128,11 +160,13 @@ watch([() => game.schoolId, () => syncState.ready], ([id, ready]) => {
       </div>
       <div v-else class="panel detail-panel school-welcome"><div class="welcome-track"><PixelRunner seed="school-explore-1" gender="女" color="#c7f36a" :size="94" /><PixelRunner seed="school-explore-2" gender="男" color="#a2bcdc" :size="75" /></div><span class="eyebrow">BIG DREAMS START AT SCHOOL</span><h2>下一位新星，從這裡出發</h2><p>選擇一所學校，認識班上的每一位跑者，<br />收藏主場、關注田徑隊，發掘他們的百米潛力。</p><span class="badge"><Icon name="pin" :size="14" />22 縣市 · 全國國中名錄</span></div>
     </div>
+    <StudentCreateDialog v-if="creatingStudent" :school-id="game.schoolId" :class-id="classId" @close="creatingStudent = false" @created="studentCreated" />
   </section>
 </template>
 
 <style scoped>
 .school-detail { min-width: 0; }
+.schools-view :deep(.page-hero-extra) { display: flex; align-items: center; flex-wrap: wrap; justify-content: end; gap: 10px; }
 .school-heading { display: flex; gap: 18px; align-items: center; }
 .school-emblem { display: grid; place-items: center; width: 68px; height: 74px; flex-shrink: 0; background: #2d3d2c; color: #c7f36a; border: 1px solid #46563c; border-radius: 14px 14px 22px 22px; }
 .school-heading-copy { min-width: 0; }

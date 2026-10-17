@@ -152,6 +152,92 @@
                     ".validate": "newData.hasChildren(['studentId', 'schoolId', 'classId', 'city', 'time', 'place', 'meetId', 'awardedAt', 'awardedAtMs']) && newData.child('studentId').val() === $studentId && newData.child('meetId').val() === $meetId && newData.child('time').isNumber() && newData.child('time').val() >= 10 && newData.child('place').isNumber() && newData.child('place').val() >= 1 && newData.child('place').val() <= 6 && newData.child('awardedAtMs').isNumber()"
                   }
                 }
+              },
+              "addedStudents": {
+                ".indexOn": [
+                  "admittedAt"
+                ],
+                "$studentId": {
+                  ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId && !data.exists() && newData.exists()",
+                  ".validate": "newData.hasChildren([\"id\", \"studentNumber\", \"name\", \"gender\", \"age\", \"height\", \"weight\", \"grade\", \"baseline100\", \"seat\", \"classIndex\", \"manuallyCreated\", \"creationId\", \"createdAt\", \"schoolId\", \"classId\", \"admittedAt\", \"explosiveness\", \"strength\", \"technique\", \"endurance\", \"stamina\"]) && root.child('users').child($uid).child('worlds').child($worldId).child('dynamic/admissionSeats').child(newData.child('classId').val()).child(newData.child('seat').val() + '').child('creationId').val() === newData.child('creationId').val() && root.child('users').child($uid).child('worlds').child($worldId).child('dynamic/admissionSeats').child(newData.child('classId').val()).child(newData.child('seat').val() + '').child('studentNumber').val() === $studentId && root.child('users').child($uid).child('worlds').child($worldId).child('static/schools').child(newData.child('schoolId').val()).child('school/classes').child(newData.child('classIndex').val() + '').child('id').val() === newData.child('classId').val() && root.child('users').child($uid).child('worlds').child($worldId).child('static/schools').child(newData.child('schoolId').val()).child('school/classes').child(newData.child('classIndex').val() + '').child('grade').val() === newData.child('grade').val() && root.child('users').child($uid).child('worlds').child($worldId).child('dynamic/admissionSeats').child(newData.child('classId').val()).child(newData.child('seat').val() + '').child('schoolId').val() === newData.child('schoolId').val() && root.child('users').child($uid).child('worlds').child($worldId).child('dynamic/admissionSeats').child(newData.child('classId').val()).child(newData.child('seat').val() + '').child('classIndex').val() === newData.child('classIndex').val()",
+                  "id": {
+                    ".validate": "newData.val() === $studentId"
+                  },
+                  "studentNumber": {
+                    ".validate": "newData.val() === $studentId && newData.isString() && newData.val().matches(/^[A-Z]{2,3}[0-9]{7}$/)"
+                  },
+                  "name": {
+                    ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+                  },
+                  "gender": {
+                    ".validate": "newData.val() === '男' || newData.val() === '女'"
+                  },
+                  "age": {
+                    ".validate": "newData.isNumber() && newData.val() >= 11 && newData.val() <= 17 && newData.val() % 1 === 0"
+                  },
+                  "height": {
+                    ".validate": "newData.isNumber() && newData.val() >= 120 && newData.val() <= 220"
+                  },
+                  "weight": {
+                    ".validate": "newData.isNumber() && newData.val() >= 25 && newData.val() <= 160"
+                  },
+                  "grade": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3 && newData.val() % 1 === 0"
+                  },
+                  "baseline100": {
+                    ".validate": "newData.isNumber() && newData.val() >= 10.01 && newData.val() <= 60"
+                  },
+                  "seat": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 50 && newData.val() % 1 === 0"
+                  },
+                  "classIndex": {
+                    ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 47 && newData.val() % 1 === 0"
+                  },
+                  "manuallyCreated": {
+                    ".validate": "newData.val() === true"
+                  },
+                  "creationId": {
+                    ".validate": "newData.isString() && newData.val().length === 36"
+                  },
+                  "createdAt": {
+                    ".validate": "newData.isString()"
+                  },
+                  "schoolId": {
+                    ".validate": "newData.isString()"
+                  },
+                  "classId": {
+                    ".validate": "newData.isString()"
+                  },
+                  "admittedAt": {
+                    ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 60000"
+                  },
+                  "explosiveness": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0"
+                  },
+                  "strength": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0"
+                  },
+                  "technique": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0"
+                  },
+                  "endurance": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0"
+                  },
+                  "stamina": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0"
+                  },
+                  "$other": {
+                    ".validate": false
+                  }
+                }
+              },
+              "admissionSeats": {
+                "$classId": {
+                  "$seat": {
+                    ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId && ((!data.exists() && newData.exists()) || (!newData.exists() && !root.child('users').child($uid).child('worlds').child($worldId).child('dynamic/addedStudents').child(data.child('studentNumber').val()).exists()))",
+                    ".validate": "$seat.matches(/^([1-9]|[1-4][0-9]|50)$/) && newData.hasChildren(['creationId','studentNumber','schoolId','classId','classIndex','seat','createdAt']) && newData.child('creationId').isString() && newData.child('creationId').val().length === 36 && newData.child('studentNumber').isString() && newData.child('studentNumber').val().matches(/^[A-Z]{2,3}[0-9]{7}$/) && newData.child('classId').val() === $classId && newData.child('seat').isNumber() && newData.child('seat').val() + '' === $seat && root.child('users').child($uid).child('worlds').child($worldId).child('static/schools').child(newData.child('schoolId').val()).child('school/classes').child(newData.child('classIndex').val() + '').child('id').val() === $classId && !root.child('users').child($uid).child('worlds').child($worldId).child('static/schools').child(newData.child('schoolId').val()).child('school/classes').child(newData.child('classIndex').val() + '').child('studentIds').hasChild((newData.child('seat').val() - 1) + '') && newData.child('createdAt').isNumber() && newData.child('seat').val() % 1 === 0 && newData.child('classIndex').isNumber() && newData.child('classIndex').val() >= 0 && newData.child('classIndex').val() <= 47 && newData.child('classIndex').val() % 1 === 0 && newData.child('studentPrefix').isString() && newData.child('studentPrefix').val().matches(/^[A-Z]{2,3}[0-9]{5}$/) && root.child('users').child($uid).child('worlds').child($worldId).child('static/schools').child(newData.child('schoolId').val()).child('school/classes').child(newData.child('classIndex').val() + '').child('studentIds/0').val() === newData.child('studentPrefix').val() + '01' && newData.child('studentNumber').val() === newData.child('studentPrefix').val() + (newData.child('seat').val() < 10 ? '0' : '') + $seat"
+                  }
+                }
               }
             },
             "rankings": {

@@ -1,6 +1,6 @@
 import { reactive, shallowReactive } from 'vue'
 import { saveChanges, saveLocalMetaPatch, requestPersistentStorage, exportWorld, pendingOperations } from './storage.js'
-import { cloudOperation, installCloudSync, queueSync, restoreCloud, retryCloudSync } from './cloud.js'
+import { cloudOperation, installCloudSync, queueSync, restoreCloud, retryCloudSync, reserveStudentSeat, releaseStudentSeat } from './cloud.js'
 import { flagIds } from './cloud-schema.js'
 import { rankStudents } from './generator.js'
 import { createSprintProfile } from './physics.js'
@@ -11,6 +11,7 @@ import { createWindMeet, nextWindMatch, completeWindMatch } from './wind-selecti
 import { createRegionalMeet, completeRegionalMatch, normalizeRegion } from './regional-selection.js'
 import { createNationalChampionship, completeNationalMatch } from './national-championship.js'
 import { installWindMeet, restoreWindMeet, restoreNationalWindMeet, windMeet } from './wind-meet.js'
+import { admissionDetails, buildAdmittedStudent, validateStudentInput } from './student-admission.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -18,6 +19,7 @@ export const game = shallowReactive({
   saving: false, muted: false, audioStarted: false, exportBusy: false, navigationRevision: 0,
 })
 let students = new Map(), schools = new Map(), classes = new Map(), teams = new Map()
+const admittedStudents = new Map()
 let toastTimer, mutationQueue = Promise.resolve()
 let initializationStarted = false
 
@@ -81,7 +83,10 @@ function boot() {
         worker.terminate()
         // Populate directly to avoid a temporary array of hundreds of thousands of pairs.
         students = new Map()
-        for (const student of world.students) students.set(student.id, student)
+        for (const student of world.students) {
+          students.set(student.id, student)
+          if (student.manuallyCreated) admittedStudents.set(student.id, student)
+        }
         schools = new Map(world.schools.map(school => [school.id, school]))
         teams = new Map(world.teams.map(team => [team.id, team]))
         classes = new Map()
@@ -96,7 +101,7 @@ function boot() {
             game.world.nationalWindMeetProgress = progress
           },
         })
-        installCloudSync(() => game.world, mergeCloudData)
+        installCloudSync(() => game.world, mergeCloudData, getStudent)
         // Existing local data is usable immediately, even with an offline
         // backlog or a long first upload. The outbox preserves new edits.
         void retryCloudSync()
@@ -141,6 +146,7 @@ function autoMeetSnapshot() {
     heatIndex: autoMeet.heatIndex, completedSchools: autoMeet.completedSchools,
     completedHeats: autoMeet.completedHeats, completedClasses: autoMeet.completedClasses,
     completedStudents: autoMeet.completedStudents, totalHeats: autoMeet.totalHeats,
+    queue: autoMeet.queue.map(heat => ({ ...heat, studentIds: [...heat.studentIds] })),
     speed: autoMeet.speed, paused: autoMeet.paused,
   }
 }
@@ -178,11 +184,11 @@ function recoverNationalAutomaticMeet(world) {
 
   let schoolIndex = 0, heatIndex = 0, completedSchools = 0
   let completedHeats = 0, completedClasses = 0, completedStudents = 0
-  let interrupted = false
+  let interrupted = false, interruptedQueue = []
   for (let index = 0; index < schoolList.length; index++) {
     const school = schoolList[index]
-    const queue = automaticHeatQueue(school)
     const savedRaces = latestRun.racesBySchool.get(school.id) || []
+    const queue = automaticHeatQueue(school, savedRaces)
     const racesByHeat = new Map(savedRaces.map(race => [`${race.classId}:${race.heat}`, race]))
     let completedInSchool = 0
     for (const heat of queue) {
@@ -191,6 +197,7 @@ function recoverNationalAutomaticMeet(world) {
         schoolIndex = index
         heatIndex = completedInSchool
         interrupted = true
+        interruptedQueue = queue
         break
       }
       completedInSchool++
@@ -210,7 +217,8 @@ function recoverNationalAutomaticMeet(world) {
     schoolIds: schoolList.map(school => school.id), schoolIndex,
     schoolId: schoolList[schoolIndex]?.id, sessionId: `${latestRun.runId}-${schoolList[schoolIndex]?.id}`,
     heatIndex, completedSchools, completedHeats, completedClasses, completedStudents,
-    totalHeats: schoolList.reduce((total, school) => total + automaticHeatQueue(school).length, 0),
+    queue: interruptedQueue,
+    totalHeats: schoolList.reduce((total, school) => total + automaticHeatQueue(school, latestRun.racesBySchool.get(school.id) || []).length, 0),
     speed: 16, paused: false, recovered: true,
   }
 }
@@ -228,6 +236,9 @@ function resumeAutomaticMeet(snapshot) {
   })
   setMusicMode('race')
   prepareAutomaticSchool()
+  if (snapshot.queue?.length) autoMeet.queue = snapshot.queue.map(heat => ({ ...heat, studentIds: [...heat.studentIds] }))
+  else autoMeet.queue = automaticHeatQueue(getSchool(autoMeet.schoolId),
+    game.world.races.filter(race => race.sessionId === autoMeet.sessionId))
   autoMeet.heatIndex = Math.min(heatIndex, Math.max(0, autoMeet.queue.length - 1))
   prepareAutomaticHeat(autoClock.start(autoMeet.speed))
   if (autoMeet.paused) autoClock.pause()
@@ -237,6 +248,7 @@ function resumeAutomaticMeet(snapshot) {
 }
 
 export const getStudent = id => students.get(id)
+export const getAdmittedStudents = () => admittedStudents.values()
 export const getSchool = id => schools.get(id)
 export const getClass = id => classes.get(id)
 export const getTeam = id => teams.get(id)
@@ -290,9 +302,31 @@ async function mergeCloudData(update) {
   return transaction(async () => {
     const pending = (await pendingOperations()).filter(operation => operation.id !== update.acknowledge)
     if (update.stillCurrent && !update.stillCurrent()) return false
-    const patches = Object.assign({}, ...pending.filter(operation => operation.type === 'patch').map(operation => operation.payload))
+    const patches = Object.assign({}, ...pending.map(operation => {
+      if (operation.type === 'patch') return operation.payload
+      if (operation.type !== 'student-create') return {}
+      const { student, teamId } = operation.payload
+      return { [`dynamic/profiles/${student.id}/nickname`]: student.nickname,
+        [`dynamic/rosters/${teamId}/${student.id}`]: student.isSchoolTeam }
+    }))
     const changed = new Map()
     const changedTeams = new Map()
+    const changedSchools = new Map()
+    for (const student of update.addedStudents || []) {
+      if (getStudent(student.id)) continue
+      const school = getSchool(student.schoolId), classroom = getClass(student.classId)
+      if (!student.manuallyCreated || !school || !classroom || classroom.schoolId !== school.id || classroom.grade !== student.grade) {
+        throw new Error('新增學生的班級資料無法識別，已保留本機存檔。')
+      }
+      const next = changedSchools.get(school.id) || { ...school, classes: school.classes.map(cls => ({ ...cls, studentIds: [...cls.studentIds] })) }
+      const target = next.classes.find(cls => cls.id === classroom.id)
+      if (!target.studentIds.includes(student.id)) {
+        if (target.studentIds.length >= 50) throw new Error('插班資料超過班級人數上限，已保留本機存檔。')
+        target.studentIds.push(student.id)
+      }
+      changedSchools.set(school.id, next)
+      changed.set(student.id, { ...student, ranks: { ...student.ranks } })
+    }
     const studentCopy = id => {
       if (!changed.has(id) && getStudent(id)) changed.set(id, { ...getStudent(id), ranks: { ...getStudent(id).ranks } })
       return changed.get(id)
@@ -335,7 +369,7 @@ async function mergeCloudData(update) {
       const path = `dynamic/rosters/${team.id}/${student.id}`
       if (path in patches) student.isSchoolTeam = !!patches[path]
       // A one-student detail refresh also updates the local team's index.
-      if (student.isSchoolTeam !== getStudent(student.id).isSchoolTeam) {
+      if (student.isSchoolTeam !== Boolean(getStudent(student.id)?.isSchoolTeam)) {
         const next = changedTeams.get(team.id) || { ...team, memberIds: [...team.memberIds] }
         next.memberIds = next.memberIds.filter(id => id !== student.id)
         if (student.isSchoolTeam) next.memberIds.push(student.id)
@@ -343,6 +377,7 @@ async function mergeCloudData(update) {
       }
     }
     const meta = {}
+    if (update.admissionCursor != null) meta.admissionCursor = Math.max(game.world.admissionCursor || 0, update.admissionCursor)
     if (update.schoolChampions) {
       const { schoolId, champions } = update.schoolChampions
       const merged = { ...champions }
@@ -411,7 +446,7 @@ async function mergeCloudData(update) {
     const savedRace = update.syncedRaceId && game.world.races.find(race => race.id === update.syncedRaceId)
     const syncedRace = savedRace?.syncStatus === 'pending' ? { ...savedRace } : null
     if (syncedRace) delete syncedRace.syncStatus
-    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards, windMeets: changedWindMeets, regionMeets: changedRegionMeets, nationalMeets: changedNationalMeets },
+    await saveChanges({ ...game.world, ...meta }, { schools: [...changedSchools.values()], students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards, windMeets: changedWindMeets, regionMeets: changedRegionMeets, nationalMeets: changedNationalMeets },
       { acknowledge: update.acknowledge, cache: update.cache })
     Object.assign(game.world, meta)
     for (const meet of changedWindMeets) {
@@ -429,7 +464,30 @@ async function mergeCloudData(update) {
       if (index < 0) game.world.nationalMeets.push(meet)
       else game.world.nationalMeets[index] = meet
     }
-    for (const student of changed.values()) Object.assign(getStudent(student.id), student)
+    for (const school of changedSchools.values()) {
+      const original = getSchool(school.id)
+      for (const classroom of school.classes) Object.assign(getClass(classroom.id), classroom)
+      // Keep existing class objects referenced by race selectors.
+      Object.assign(original, { ...school, classes: original.classes })
+    }
+    let populationChanged = false
+    for (const student of changed.values()) {
+      const original = getStudent(student.id)
+      if (original) Object.assign(original, student)
+      else {
+        students.set(student.id, student)
+        admittedStudents.set(student.id, student)
+        game.world.students.push(student)
+        populationChanged = true
+      }
+    }
+    if (populationChanged) {
+      rankStudents(game.world)
+      if (update.ranking) for (const entry of update.ranking.entries) {
+        const student = getStudent(entry.id)
+        if (student) student.ranks[update.ranking.scope] = entry.rank
+      }
+    }
     for (const team of changedTeams.values()) Object.assign(getTeam(team.id), team)
     game.world.races.push(...newRaces)
     if (syncedRace) {
@@ -511,16 +569,55 @@ export async function editStudent(id, changes) {
   })
 }
 
-function automaticHeatQueue(school) {
+export async function admitStudent(input, schoolId, classId, creationId = crypto.randomUUID()) {
+  const data = validateStudentInput(input)
+  const school = getSchool(schoolId), classroom = getClass(classId)
+  admissionDetails(school, classroom, getStudent)
+  const details = await reserveStudentSeat(school, classroom,
+    reserved => admissionDetails(school, classroom, getStudent, reserved), creationId)
+  try {
+    return await transaction(async () => {
+      const existing = getStudent(details.studentNumber)
+      if (existing?.creationId === creationId) return existing
+      if (existing || classroom.studentIds.length >= 50) throw new Error('班級名額已變更，請重新選擇班級。')
+      const student = buildAdmittedStudent(data, school, classroom, details, creationId)
+      const nextClass = { ...classroom, studentIds: [...classroom.studentIds, student.id] }
+      const nextSchool = { ...school, classes: school.classes.map(cls => cls.id === classId ? nextClass : cls) }
+      const team = getTeam(school.teamId)
+      const nextTeam = { ...team, memberIds: student.isSchoolTeam ? [...team.memberIds, student.id] : [...team.memberIds] }
+      await saveChanges(game.world, { schools: [nextSchool], students: [student], teams: [nextTeam] }, {
+        enqueue: cloudOperation('student-create', { student, teamId: team.id }),
+      })
+      Object.assign(classroom, nextClass)
+      Object.assign(team, nextTeam)
+      students.set(student.id, student)
+      admittedStudents.set(student.id, student)
+      game.world.students.push(student)
+      rankStudents(game.world)
+      game.revision++
+      queueSync()
+      notify(`${student.name} 已加入 ${school.name} ${classroom.name}`)
+      return student
+    })
+  } catch (error) {
+    await releaseStudentSeat(classId, details.seat, creationId).catch(() => {})
+    throw error
+  }
+}
+
+function automaticHeatQueue(school, savedRaces = []) {
+  const startedAt = savedRaces.length ? Math.min(...savedRaces.map(race => Date.parse(race.startedAt || race.finishedAt))) : Infinity
   return school.classes
     .slice()
     .sort((a, b) => a.grade - b.grade || a.number - b.number)
-    .flatMap(cls => Array.from({ length: Math.ceil(cls.studentIds.length / 8) }, (_, index) => ({
-      classId: cls.id,
-      heat: index + 1,
-      totalHeats: Math.ceil(cls.studentIds.length / 8),
-      studentIds: cls.studentIds.slice(index * 8, index * 8 + 8),
-    })))
+    .flatMap(cls => {
+      const participants = savedRaces.find(race => race.classId === cls.id && race.classParticipantIds?.length)?.classParticipantIds ||
+        cls.studentIds.filter(id => !getStudent(id)?.manuallyCreated || Date.parse(getStudent(id).createdAt) <= startedAt)
+      return Array.from({ length: Math.ceil(participants.length / 8) }, (_, index) => ({
+        classId: cls.id, heat: index + 1, totalHeats: Math.ceil(participants.length / 8),
+        studentIds: participants.slice(index * 8, index * 8 + 8),
+      }))
+    })
 }
 
 function prepareAutomaticSchool() {
@@ -610,6 +707,7 @@ async function finishAutomaticHeat() {
       sessionId: autoMeet.sessionId,
       schoolId: autoMeet.schoolId,
       classId: heat.classId,
+      classParticipantIds: autoMeet.queue.filter(entry => entry.classId === heat.classId).flatMap(entry => entry.studentIds),
       heat: heat.heat,
       startedAt: autoMeet.startedAt,
       finishedAt: autoMeet.finishedAt,
@@ -760,7 +858,8 @@ function medalsForClass(sessionId, classId, races) {
   const classRaces = races.filter(race => race.sessionId === sessionId && race.classId === classId)
   const results = classRaces.flatMap(race => race.results)
   const participants = new Set(results.map(result => result.studentId))
-  if (participants.size !== cls.studentIds.length || !cls.studentIds.every(id => participants.has(id))) return null
+  const expected = classRaces.find(race => race.classParticipantIds?.length)?.classParticipantIds || cls.studentIds
+  if (participants.size !== expected.length || !expected.every(id => participants.has(id))) return null
   const dateTime = classRaces.reduce((latest, race) => race.finishedAt > latest ? race.finishedAt : latest, '')
   const awards = results.sort((a, b) => a.time - b.time).slice(0, 3).map((result, index) => ({
     id: `${sessionId}-${classId}-medal-${index}`, sessionId, classId, schoolId: cls.schoolId,
@@ -781,7 +880,7 @@ function applyMedals(medals) {
   Object.assign(medals.team, medals.nextTeam)
 }
 
-export async function recordHeat({ id, sessionId, schoolId, classId = null, classIds = [], teamId = null, mode = 'class', windMatchId = null, regionMatchId = null, nationalMatchId = null, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
+export async function recordHeat({ id, sessionId, schoolId, classId = null, classIds = [], classParticipantIds = [], teamId = null, mode = 'class', windMatchId = null, regionMatchId = null, nationalMatchId = null, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
   return transaction(async () => {
     const existing = game.world.races.find(race => race.id === id)
     if (existing) return existing
@@ -816,6 +915,7 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
       id, sessionId, schoolId, classId: cls?.id ?? null, teamId: team?.id ?? null, teamName: team?.name ?? null,
       schoolName: school.name, className: championship ? savedNational.eventName : regional ? savedRegion.eventName : team ? `${team.name} 隊內賽` : crossClass ? classIds.map(id => getClass(id).name).join(' vs. ') : cls.name,
       classColor: cls?.color ?? null,
+      ...(classParticipantIds.length ? { classParticipantIds: [...new Set(classParticipantIds)] } : {}),
       heat, event: '100m', mode, classIds, ...(championship ? { nationalMatchId, cities: match.cities, schoolIds: match.schoolIds, round: match.round }
         : regional ? { regionMatchId, city: savedRegion.city, schoolIds: match.schoolIds, round: match.round }
         : match ? { windMatchId, grade: match.grade, round: match.round } : {}), startedAt, finishedAt, syncStatus: 'pending',
