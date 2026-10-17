@@ -570,7 +570,7 @@ export async function editStudent(id, changes) {
 }
 
 export async function admitStudent(input, schoolId, classId, creationId = crypto.randomUUID()) {
-  const data = validateStudentInput(input)
+  validateStudentInput(input)
   const school = getSchool(schoolId), classroom = getClass(classId)
   admissionDetails(school, classroom, getStudent)
   const details = await reserveStudentSeat(school, classroom,
@@ -580,7 +580,7 @@ export async function admitStudent(input, schoolId, classId, creationId = crypto
       const existing = getStudent(details.studentNumber)
       if (existing?.creationId === creationId) return existing
       if (existing || classroom.studentIds.length >= 50) throw new Error('班級名額已變更，請重新選擇班級。')
-      const student = buildAdmittedStudent(data, school, classroom, details, creationId)
+      const student = buildAdmittedStudent(input, school, classroom, details, creationId)
       const nextClass = { ...classroom, studentIds: [...classroom.studentIds, student.id] }
       const nextSchool = { ...school, classes: school.classes.map(cls => cls.id === classId ? nextClass : cls) }
       const team = getTeam(school.teamId)
