@@ -5,10 +5,19 @@ import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
 import WindTitleBadge from './WindTitleBadge.vue'
 import { fetchStudent } from '../lib/cloud.js'
-import { nationalPodiumLabel } from '../lib/national-championship.js'
+import { nationalPodiumLabel, regionalDelegation } from '../lib/national-championship.js'
 
 const dialog = ref(null)
-const student = computed(() => { game.revision; const value = getStudent(game.studentId); return value ? { ...value, ranks: { ...value.ranks } } : null })
+function isCurrentCityRepresentative(value) {
+  const city = getSchool(value.schoolId)?.city
+  return Boolean(city && regionalDelegation(city, game.world.regionMeets, getStudent, getSchool)
+    .some(runner => runner.studentId === value.id))
+}
+const student = computed(() => {
+  game.revision
+  const value = getStudent(game.studentId)
+  return value ? { ...value, isCityTeam: isCurrentCityRepresentative(value), ranks: { ...value.ranks } } : null
+})
 const school = computed(() => student.value ? getSchool(student.value.schoolId) : null)
 const classroom = computed(() => student.value ? getClass(student.value.classId) : null)
 const nickname = ref(student.value?.nickname || '')
