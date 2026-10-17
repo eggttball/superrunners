@@ -14,7 +14,7 @@ const DEFAULTS = Object.freeze({
   technique: 5.5,
 })
 const VARIATION_BANDS = Object.freeze([
-  [10, 0.1], [11, 0.2], [12, 0.3], [13, 0.4], [14, 0.6], [15, 0.8], [16, 1],
+  [10, 0.4], [11, 0.5], [12, 0.6], [13, 0.7], [14, 0.8], [15, 0.9], [16, 1],
 ])
 
 function finite(value, fallback) {
@@ -69,13 +69,18 @@ function raceTime(student, random) {
   const explosivePotential = (a.explosiveness - 1) / 9
   const formControl = (a.endurance + a.stamina + a.strength + a.technique) / 4
   const instability = Math.max(0, Math.min(1, (10 - formControl) / 9))
+  const formPotential = (a.explosiveness + a.endurance + a.stamina + a.technique - 4) / 36
+  const progressSwingChance = 0.20 + 0.55 * formPotential
+  const endurancePotential = (a.endurance + a.stamina - 2) / 18
   const largeSwingChance = 0.10 + 0.20 * explosivePotential + 0.20 * instability
   const attributeScale = 0.80 + 0.20 * instability + 0.40 * explosivePotential
-  const swingScale = random() < largeSwingChance ? 1 : 0.30
+  const swingScale = random() < largeSwingChance ? 1 : 0.55
   const amplitude = variationLimit(baseline) * attributeScale * swingScale
-  // Three samples keep ordinary results clustered around the estimate while
-  // respecting the individual amplitude envelope for this runner's pace.
-  const variation = (random() + random() + random() - 1.5) * (2 * amplitude / 3)
+  // High technique, endurance, stamina, and explosiveness make favorable
+  // performances more common. Explosiveness and endurance widen that upside.
+  const centeredSwing = (random() + random() + random() - 1.5) * (2 * amplitude / 3)
+  const progressScale = 0.75 + 0.35 * explosivePotential + 0.30 * endurancePotential
+  const variation = Math.abs(centeredSwing) * (random() < progressSwingChance ? -progressScale : 1)
   const pace = Math.min(baseline, currentBest)
   const remainingHeadroom = Math.max(0, Math.min(1, (pace - 10) / 6))
   const paceDifficulty = remainingHeadroom * remainingHeadroom
