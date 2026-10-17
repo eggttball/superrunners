@@ -16,7 +16,7 @@ import WindTitleBadge from './WindTitleBadge.vue'
 import WindMeetSummary from './WindMeetSummary.vue'
 import NationalWindSummary from './NationalWindSummary.vue'
 
-const props = defineProps({ regionalOnly: Boolean })
+const props = defineProps({ regionalOnly: Boolean, championshipOnly: Boolean })
 
 const gradeLabels = ['一年級', '二年級', '三年級']
 const selectedSchoolId = ref(game.schoolId)
@@ -54,6 +54,7 @@ const automatic = computed(() => autoMeet.active || autoMeet.phase === 'complete
 const windSelection = computed(() => windMeet.active || windMeet.phase === 'complete')
 const nationalWindSelection = computed(() => windSelection.value && windMeet.scope === 'national')
 const regionalSelection = computed(() => windSelection.value && windMeet.scope === 'regional')
+const championshipSelection = computed(() => windSelection.value && windMeet.scope === 'championship')
 const friendlyRace = computed(() => windSelection.value && windMeet.friendly)
 const nationalAutomatic = computed(() => automatic.value && autoMeet.scope === 'national')
 const displayedSchoolId = computed(() => windSelection.value ? windMeet.schoolIds[windMeet.schoolIndex] || windMeet.meet?.schoolId || windMeet.meet?.schoolIds?.[0] : automatic.value ? autoMeet.schoolId : selectedSchoolId.value)
@@ -82,7 +83,8 @@ const current = computed(() => windSelection.value ? { ...windMeet.match, heat: 
 const teamRace = computed(() => !windSelection.value && Boolean(current.value?.teamId || game.raceTeamId))
 const currentClass = computed(() => current.value ? getClass(current.value.classId) : null)
 const currentTeam = computed(() => getTeam(current.value?.teamId || game.raceTeamId))
-const displayClassName = computed(() => regionalSelection.value ? windMeet.meet?.friendly ? `校際友誼賽 · 第 ${windMeet.match?.number || 1} / ${windMeet.meet.totalMatches} 組`
+const displayClassName = computed(() => championshipSelection.value ? windMeet.match?.final ? `全國總冠軍賽${windMeet.meet?.friendly ? ' · 友誼賽' : ' · 風神爭奪戰'}` : `第 ${windMeet.match?.round || 1} 輪 · 第 ${windMeet.match?.number || 1} 場 · 前三名晉級`
+  : regionalSelection.value ? windMeet.meet?.friendly ? `校際友誼賽 · 第 ${windMeet.match?.number || 1} / ${windMeet.meet.totalMatches} 組`
   : windMeet.match?.final ? '冠軍決賽 · 風速王子爭奪戰' : `第 ${windMeet.match?.round || 1} 輪 · 第 ${windMeet.match?.number || 1} 場 · 前三名晉級`
   : friendlyRace.value ? '三個年級風速小子友誼賽' : windSelection.value ? !windMeet.match ? '準備選拔賽…' : `${gradeLabels[windMeet.match.grade - 1]} · ${windMeet.match.final ? '年級冠軍決賽' : `第 ${windMeet.match.round} 輪 · 前三名晉級`}` : windPractice.value ? '班級前三名練習' : currentClass.value?.name || (currentTeam.value ? `${currentTeam.value.name} 隊內賽` : ''))
 const currentRaceRecord = computed(() => {
@@ -136,7 +138,7 @@ function rankClass(rank) {
   return ''
 }
 function hasNewPersonalBest(athlete) {
-  if (friendlyRace.value || (regionalSelection.value && windMeet.meet?.friendly)) return false
+  if (friendlyRace.value || ((regionalSelection.value || championshipSelection.value) && windMeet.meet?.friendly)) return false
   if (raceElapsed.value < athlete.profile.time) return false
   const previousBest = athlete.student.best100
   return !Number.isFinite(previousBest) || previousBest <= 0 || athlete.profile.time < previousBest
@@ -386,6 +388,7 @@ function nextHeat() {
 
 function returnToSetup() {
   const returnToRegion = props.regionalOnly || regionalSelection.value
+  const returnToNational = props.championshipOnly || championshipSelection.value
   viewedWindMeet.value = null
   dismissWindMeet()
   dismissAutomaticMeetResult()
@@ -397,6 +400,7 @@ function returnToSetup() {
   windPractice.value = false
   if (teamRace.value) { game.raceTeamId = ''; go('teams') }
   if (returnToRegion) go('region')
+  if (returnToNational) go('national')
 }
 function leaveTeamRaceSetup() { game.raceTeamId = ''; go('teams') }
 onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(frame); game.raceTitle = ''; if (!automatic.value && !windSelection.value) setMusicMode('ambient') })
@@ -405,7 +409,7 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
 <template>
   <section class="content-view race-view">
     <NationalWindSummary v-if="nationalWindSelection && racePhase === 'complete'" :run-id="windMeet.runId" :school-ids="windMeet.schoolIds" @back="returnToSetup" />
-    <WindMeetSummary v-else-if="viewedWindMeet || (windSelection && racePhase === 'complete')" :meet="viewedWindMeet || windMeet.meet" :friendship-results="viewedWindMeet ? [] : windMeet.friendshipResults" :back-label="regionalSelection ? '回區域比賽' : '回比賽選單'" @back="returnToSetup" />
+    <WindMeetSummary v-else-if="viewedWindMeet || (windSelection && racePhase === 'complete')" :meet="viewedWindMeet || windMeet.meet" :friendship-results="viewedWindMeet ? [] : windMeet.friendshipResults" :back-label="championshipSelection ? '回全國大賽' : regionalSelection ? '回區域比賽' : '回比賽選單'" @back="returnToSetup" />
     <template v-else-if="racePhase === 'setup'">
       <template v-if="teamRace">
         <GamePageHeader title="田徑隊內賽" caption="TEAM SPRINT" description="由所選隊伍的隊員同場競速，成績會更新個人最佳紀錄。" theme="race"><button class="btn ghost" @click="leaveTeamRaceSetup"><Icon name="back" :size="18" />回我的隊伍</button></GamePageHeader>
@@ -440,11 +444,11 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
     </template>
 
     <template v-else-if="racePhase !== 'complete'">
-      <div class="race-header"><div><h1>{{ regionalSelection ? windMeet.meet.friendly ? windMeet.meet.city + '校際友誼賽' : windMeet.meet.eventName : teamRace ? currentTeam.name : school.name }}<span class="heading-dot">.</span></h1><p class="muted"><span v-if="windSelection" class="wind-race-caption">{{ regionalSelection ? '' : '風速小子 · ' }}{{ displayClassName }}</span><template v-else>{{ displayClassName }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組</template><span v-if="automatic"> · {{ nationalAutomatic ? '全國校內自動賽' : '全校自動賽' }}</span></p><span v-if="currentRaceRecord?.syncStatus === 'pending'" class="badge local-pending">本機待同步</span></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
+      <div class="race-header"><div><h1>{{ championshipSelection ? windMeet.meet.eventName : regionalSelection ? windMeet.meet.friendly ? windMeet.meet.city + '校際友誼賽' : windMeet.meet.eventName : teamRace ? currentTeam.name : school.name }}<span class="heading-dot">.</span></h1><p class="muted"><span v-if="windSelection" class="wind-race-caption">{{ regionalSelection || championshipSelection ? '' : '風速小子 · ' }}{{ displayClassName }}</span><template v-else>{{ displayClassName }} · 第 {{ current.heat }} / {{ current.totalHeats }} 組</template><span v-if="automatic"> · {{ nationalAutomatic ? '全國校內自動賽' : '全校自動賽' }}</span></p><span v-if="currentRaceRecord?.syncStatus === 'pending'" class="badge local-pending">本機待同步</span></div><div class="race-clock"><strong>{{ timeText(Math.min(maxTime, Math.max(0, raceElapsed))) }}<small>s</small></strong></div></div>
       <div v-if="nationalAutomatic" class="national-meet-status" role="status"><span><Icon name="pin" :size="16" /><strong>{{ school.city }}</strong> · 第 {{ autoMeet.schoolIndex + 1 }} / {{ autoMeet.schoolIds.length }} 所學校</span><span>已完成 {{ autoMeet.completedSchools }} 所 · {{ autoMeet.completedHeats.toLocaleString() }} / {{ autoMeet.totalHeats.toLocaleString() }} 組</span></div>
       <div v-if="nationalWindSelection" class="national-meet-status"><span><Icon name="pin" :size="16" /><strong>{{ school.city }}</strong> · 第 {{ windMeet.schoolIndex + 1 }} / {{ windMeet.schoolIds.length }} 所學校</span><span>已選拔 {{ windMeet.completedSchools }} 所 · 全國 {{ windMeet.completedMatches }} / {{ windMeet.totalMatches }} 場 · 當校 {{ windMeet.meet?.completedMatches || 0 }} / {{ windMeet.meet?.totalMatches || 0 }} 場</span></div>
       <div class="race-progress" role="progressbar" :aria-label="nationalAutomatic ? '全國校內賽程進度' : '賽程進度'" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(meetProgress)"><i :style="{ width: meetProgress + '%' }"></i></div>
-      <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><div class="race-topline-controls"><button v-if="racePhase === 'heatdone'" class="btn small primary next-heat-button" @click="nextHeat">{{ raceHeatIndex + 1 === raceQueue.length ? '查看總結' : '下一組' }}<Icon name="arrow" :size="16" /></button><button v-if="racePhase === 'saveerror'" class="btn small primary" @click="retryDisplayedSave">重試保存</button><button v-if="racePhase === 'running' || racePhase === 'countdown' || ((automatic || windSelection) && ['saving', 'preparing'].includes(racePhase))" class="btn small" @click="toggleDisplayedPause"><Icon :name="racePaused ? 'play' : 'pause'" :size="16" />{{ racePaused ? '繼續' : '暫停' }}</button><button v-if="nationalAutomatic && autoMeet.active" class="btn small terminate-national-meet" @click="confirmTerminateNationalMeet"><Icon name="close" :size="15" />終止全國賽</button><button v-if="nationalWindSelection && windMeet.active" class="btn small terminate-national-meet" @click="confirmTerminateNationalWindMeet"><Icon name="close" :size="15" />終止全國選拔</button><button v-for="rate in [1, 2, 4, 8, 16]" :key="rate" class="speed-button" :class="{ active: raceSpeed === rate }" @click="setDisplayedSpeed(rate)">{{ rate }}×</button></div></div><Track :runners="runners" :animated="racePhase === 'running' && !racePaused" :paused="racePhase === 'running' && racePaused" race-mode /><div v-if="racePhase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="racePhase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="racePaused" class="pause-overlay">PAUSED<span>比賽已暫停</span></div></div>
+      <div class="stadium-card race-stadium"><div class="stadium-topline"><span>百米直道 <b>100 METRES · 8 LANES</b></span><div class="race-topline-controls"><button v-if="racePhase === 'heatdone'" class="btn small primary next-heat-button" @click="nextHeat">{{ raceHeatIndex + 1 === raceQueue.length ? '查看總結' : '下一組' }}<Icon name="arrow" :size="16" /></button><button v-if="racePhase === 'saveerror'" class="btn small primary" @click="retryDisplayedSave">重試保存</button><button v-if="racePhase === 'running' || racePhase === 'countdown' || ((automatic || windSelection) && ['saving', 'preparing'].includes(racePhase))" class="btn small" @click="toggleDisplayedPause"><Icon :name="racePaused ? 'play' : 'pause'" :size="16" />{{ racePaused ? '繼續' : '暫停' }}</button><button v-if="nationalAutomatic && autoMeet.active" class="btn small terminate-national-meet" @click="confirmTerminateNationalMeet"><Icon name="close" :size="15" />終止全國賽</button><button v-if="nationalWindSelection && windMeet.active" class="btn small terminate-national-meet" @click="confirmTerminateNationalWindMeet"><Icon name="close" :size="15" />終止全國選拔</button><button v-for="rate in [1, 2, 4, 8, 16]" :key="rate" class="speed-button" :class="{ active: raceSpeed === rate }" @click="setDisplayedSpeed(rate)">{{ rate }}×</button></div></div><Track :runners="runners" :animated="racePhase === 'running' && !racePaused" :paused="racePhase === 'running' && racePaused" race-mode /><div v-if="racePhase === 'countdown'" class="countdown-overlay"><span>ON YOUR MARKS</span><strong :key="countdown">{{ countdown }}</strong></div><div v-if="racePhase === 'ready'" class="race-ready-overlay"><span class="eyebrow">READY WHEN YOU ARE</span><strong>各就各位</strong><button class="btn primary" @click="startHeat"><Icon name="play" :size="18" />開始比賽</button></div><div v-if="racePaused" class="pause-overlay">PAUSED<span>{{ championshipSelection && windMeet.match?.final && racePhase === 'countdown' ? '全國總冠軍賽 · 按繼續開跑' : '比賽已暫停' }}</span></div></div>
       <p v-if="racePhase === 'saveerror'" class="data-note" role="alert">{{ windSelection ? windMeet.error : automatic ? autoMeet.error : saveError }}</p>
       <p v-if="windSelection && windMeet.error && racePhase !== 'saveerror'" class="data-note" role="alert">{{ windMeet.error }}</p><div class="lane-cards">
         <button v-for="(athlete, index) in raceParticipants" :key="athlete.student.id" class="lane-card" :class="{ 'new-personal-best': hasNewPersonalBest(athlete) }" @click="game.studentId = athlete.student.id" :style="{ '--runner-color': athlete.classColor }">
@@ -454,7 +458,7 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
           </span>
           <span v-if="hasNewPersonalBest(athlete)" class="personal-best-badge" :title="athlete.student.best100 == null ? '建立第一筆正式百米最佳' : '刷新個人百米最佳'"><Icon name="trophy" :size="12" />{{ athlete.student.best100 == null ? '首筆 PB' : '新 PB!' }}</span>
           <strong class="lane-card-name"><WindTitleBadge :student-id="athlete.student.id" compact /><span v-if="athlete.student.isSchoolTeam" class="runner-identity-icon school-team-status" title="田徑隊" aria-label="田徑隊"><Icon name="sprint" :size="14" /></span><span v-else-if="athlete.student.isCityTeam" class="runner-identity-icon city-team-status" title="縣市代表隊" aria-label="縣市代表隊"><Icon name="flag" :size="14" /></span><span v-else-if="athlete.student.isNationalTeam" class="runner-identity-icon national-team-status" title="國家代表隊" aria-label="國家代表隊"><Icon name="globe" :size="14" /></span><span class="gender-icon" :class="athlete.student.gender === '男' ? 'gender-male' : 'gender-female'" :title="athlete.student.gender" :aria-label="athlete.student.gender"><Icon :name="athlete.student.gender === '男' ? 'male' : 'female'" :size="13" /></span>{{ athlete.student.name }}</strong>
-          <small v-if="regionalSelection" class="regional-runner-school">{{ getSchool(athlete.student.schoolId).name }}</small><small>{{ windSelection || windPractice ? getClass(athlete.student.classId).name : athlete.student.nickname || getClass(athlete.student.classId).name }}</small>
+          <small v-if="regionalSelection || championshipSelection" class="regional-runner-school">{{ championshipSelection ? getSchool(athlete.student.schoolId).city + ' · ' : '' }}{{ getSchool(athlete.student.schoolId).name }}</small><small>{{ windSelection || windPractice ? getClass(athlete.student.classId).name : athlete.student.nickname || getClass(athlete.student.classId).name }}</small>
           <span class="lane-times">
             <span><small>預估</small><b class="mono">{{ timeText(athlete.student.baseline100) }}s</b></span>
             <span><small>{{ hasNewPersonalBest(athlete) ? '新最佳' : '最佳' }}</small><b class="mono">{{ hasNewPersonalBest(athlete) ? timeText(athlete.profile.time) + 's' : athlete.student.best100 === null ? '尚無' : timeText(athlete.student.best100) + 's' }}</b></span>

@@ -55,10 +55,34 @@
 .regional-runner-school { max-width: 100%; padding: 0 3px; overflow: hidden; text-overflow: ellipsis; }
 .region-friendly-summary { padding: 22px; }
 .region-friendly-heat + .region-friendly-heat { margin-top: 24px; }
+.interior-shell .page-navigation-tabs .nav-championship { background: #ffe0a1; }
+.national-county-grid { max-height: none; }
+.regional-school-card.delegation-missing small { color: #a44e35; }
+.national-current-champion { background: #ffecb5; border-color: #b27920; }
+.national-delegation-preview { margin-top: 20px; }
+.national-delegation-preview > summary { cursor: pointer; font-weight: 700; color: #8a531e; }
+.national-delegate { width: 100%; border: 0; padding: 4px 0; background: transparent; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.national-delegate:hover { background: #ffe9b9; }
+.wind-title-badge.wind-god-badge, .wind-tree-crown.wind-god-badge { background: #7c351d; color: #ffe47e; border-color: #c88c24; box-shadow: 1px 2px 0 #e8b83e; }
+.wind-profile-honor.god { background: #fff0bf; border-color: #c88c24; color: #8d461e; }
+.wind-profile-honor.national-podium { gap: 10px; background: #fff6dc; }
+.wind-profile-honor.national-podium em { flex: 0 0 auto; font-size: 12px; font-style: normal; font-weight: 800; color: #9f542a; }
+.national-final-summary { padding: 22px; margin-bottom: 20px; }
+.national-final-summary h2 { display: flex; align-items: center; gap: 8px; font-size: 21px; }
+.national-final-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.national-final-result { display: flex; align-items: center; gap: 12px; padding: 14px; border: 2px solid #aa976f; border-radius: 5px; background: #fff9e8; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.national-final-result.winner { border-color: #bd8424; background: #ffecad; }
+.national-final-result > b { flex: 0 0 auto; font-size: 14px; color: #8a431d; }
+.national-final-result > span { flex: 1; min-width: 0; }
+.national-final-result small { display: block; margin-top: 4px; font-size: 12px; color: #796e5c; line-height: 1.5; }
+.national-final-result > strong { flex: 0 0 auto; color: #9d5636; font-size: 16px; }
+.national-final-result:hover { background: #ffe6b6; }
 @media (max-width: 760px) {
   .regional-setup-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .region-picker, .region-school-panel { padding: 16px; }
   .region-school-panel h2 { font-size: 20px; }
   .regional-school-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .regional-summary .wind-tree-collapsed strong { width: 100%; margin-left: 29px; }
+  .national-final-results { grid-template-columns: minmax(0, 1fr); }
+  .national-final-summary { padding: 16px; }
 }

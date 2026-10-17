@@ -4,6 +4,8 @@ export const scoreTime = student => student.best100 ?? student.baseline100
 export const idFlags = ids => Object.fromEntries(ids.map(id => [id, true]))
 export const flagIds = flags => Object.keys(flags || {}).filter(id => flags[id])
 export const values = object => Object.values(object || {})
+export const cloudRacePath = race => race.mode === 'national-championship' ? `dynamic/nationalRaces/${race.id}`
+  : race.mode === 'regional' ? `dynamic/regionRaces/${race.city}/${race.id}` : `dynamic/races/${race.schoolId}/${race.id}`
 
 export async function worldIdentity(world) {
   const text = JSON.stringify([world.schemaVersion, world.seed, world.createdAt, world.schools.length, world.students.length])
@@ -27,7 +29,7 @@ export function staticTeam(team) {
 }
 
 export function staticMetadata(world) {
-  const { schools, students, teams, races, awards, windMeets, windChampions, regionMeets, regionChampions, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, exportedAt, ...meta } = world
+  const { schools, students, teams, races, awards, windMeets, windChampions, regionMeets, regionChampions, nationalMeets, nationalChampion, nationalHonors, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, exportedAt, ...meta } = world
   return meta
 }
 
@@ -56,13 +58,18 @@ export function schoolUpload(world, school, students, team, races, awards) {
     if (student.best100 !== null) patch[`dynamic/bests/${student.id}`] = student.best100
     putScores(patch, student)
   }
-  for (const race of races) patch[race.mode === 'regional' ? `dynamic/regionRaces/${race.city}/${race.id}` : `dynamic/races/${school.id}/${race.id}`] = race
+  for (const race of races) patch[cloudRacePath(race)] = race
   for (const award of awards) patch[`dynamic/awards/${school.id}/${award.id}`] = award
   for (const meet of world.windMeets || []) if (meet.schoolId === school.id) patch[`dynamic/windMeets/${school.id}/${meet.id}`] = meet
   if (world.windChampions?.[school.id]) patch[`dynamic/windChampions/${school.id}`] = world.windChampions[school.id]
   // One owner school uploads each regional meet/champion during bootstrap.
   for (const meet of world.regionMeets || []) if (meet.schoolIds[0] === school.id) patch[`dynamic/regionMeets/${meet.city}/${meet.id}`] = meet
   for (const [city, champion] of Object.entries(world.regionChampions || {})) if (champion.schoolId === school.id) patch[`dynamic/regionChampions/${city}`] = champion
+  for (const meet of world.nationalMeets || []) if (meet.schoolIds[0] === school.id) patch[`dynamic/nationalMeets/${meet.id}`] = meet
+  if (world.nationalChampion?.schoolId === school.id) patch['dynamic/nationalChampion'] = world.nationalChampion
+  for (const student of students) for (const honor of world.nationalHonors?.[student.id] || []) {
+    patch[`dynamic/nationalHonors/${student.id}/${honor.meetId}`] = honor
+  }
   patch[`uploaded/${school.id}`] = true
   return patch
 }

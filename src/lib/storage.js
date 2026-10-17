@@ -1,6 +1,6 @@
 const DATABASE = 'superrunners-taiwan-v3'
 const LEGACY_DATABASES = ['superrunners-taiwan-v1', 'superrunners-taiwan-v2']
-const TABLES = ['schools', 'students', 'teams', 'races', 'awards', 'windMeets', 'regionMeets']
+const TABLES = ['schools', 'students', 'teams', 'races', 'awards', 'windMeets', 'regionMeets', 'nationalMeets']
 let connection
 let legacyCleanup
 
@@ -31,7 +31,7 @@ function clearLegacyDatabases() {
 export function openDatabase() {
   if (connection) return connection
   connection = clearLegacyDatabases().then(() => new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 4)
+    const request = indexedDB.open(DATABASE, 5)
     let abandoned = false
     request.onupgradeneeded = () => {
       const db = request.result
@@ -67,7 +67,7 @@ function value(request) {
 }
 
 export function metadata(world) {
-  const { schools, students, teams, races, awards, windMeets, regionMeets, ...meta } = world
+  const { schools, students, teams, races, awards, windMeets, regionMeets, nationalMeets, ...meta } = world
   return meta
 }
 

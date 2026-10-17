@@ -9,6 +9,7 @@ import { compareSchoolOrder } from './school-order.js'
 import { createMeetClock } from './meet-clock.js'
 import { createWindMeet, nextWindMatch, completeWindMatch } from './wind-selection.js'
 import { createRegionalMeet, completeRegionalMatch, normalizeRegion } from './regional-selection.js'
+import { createNationalChampionship, completeNationalMatch } from './national-championship.js'
 import { installWindMeet, restoreWindMeet, restoreNationalWindMeet, windMeet } from './wind-meet.js'
 
 export const game = shallowReactive({
@@ -86,7 +87,7 @@ function boot() {
         classes = new Map()
         for (const school of world.schools) for (const cls of school.classes) classes.set(cls.id, cls)
         game.world = world
-        installWindMeet({ getStudent, getSchool, getClass, saveMatch: (meet, ...args) => meet.kind === 'regional' ? recordRegionalMatch(meet, ...args) : recordWindMatch(meet, ...args), savePause: saveWindPause,
+        installWindMeet({ getStudent, getSchool, getClass, saveMatch: (meet, ...args) => meet.kind === 'national-championship' ? recordNationalMatch(meet, ...args) : meet.kind === 'regional' ? recordRegionalMatch(meet, ...args) : recordWindMatch(meet, ...args), savePause: saveWindPause,
           canStart: () => !autoMeet.active, createMeet: createSchoolWindMeet,
           getMeet: id => game.world.windMeets.find(meet => meet.id === id),
           getRunMeets: runId => game.world.windMeets.filter(meet => meet.nationalRunId === runId),
@@ -105,7 +106,7 @@ function boot() {
         game.phase = '全國資料已就緒'
         game.revision++
         const restoredWind = await restoreNationalWindMeet(world.nationalWindMeetProgress)
-        if (!restoredWind) restoreWindMeet([...world.regionMeets, ...world.windMeets.filter(meet => !meet.nationalRunId)].filter(meet => meet.status === 'running')
+        if (!restoredWind) restoreWindMeet([...world.nationalMeets, ...world.regionMeets, ...world.windMeets.filter(meet => !meet.nationalRunId)].filter(meet => meet.status === 'running')
           .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0])
         const cancelledRuns = new Set(world.cancelledAutomaticMeetRunIds || [])
         const savedProgress = world.autoMeetProgress?.active && !cancelledRuns.has(world.autoMeetProgress.runId)
@@ -241,6 +242,9 @@ export const getClass = id => classes.get(id)
 export const getTeam = id => teams.get(id)
 export function getWindTitle(studentId) {
   game.revision
+  if (!studentId) return null
+  const god = game.world?.nationalChampion
+  if (god?.studentId === studentId) return { ...god, title: '風神', kind: 'god' }
   const student = getStudent(studentId)
   const prince = student && game.world?.regionChampions?.[normalizeRegion(getSchool(student.schoolId)?.city)]
   if (prince?.studentId === studentId) return { ...prince, title: '風速王子', kind: 'prince' }
@@ -372,6 +376,27 @@ async function mergeCloudData(update) {
       const local = game.world.regionMeets.find(saved => saved.id === meet.id)
       return unsent || (local?.completedMatches > meet.completedMatches ? local : meet)
     })
+    if (Object.hasOwn(update, 'nationalChampion')) {
+      let champion = update.nationalChampion
+      const candidates = [game.world.nationalChampion, ...pending.filter(operation => operation.type === 'heat').map(operation => operation.payload.nationalChampion)]
+      for (const candidate of candidates) if (candidate && (!champion || candidate.awardedAtMs >= champion.awardedAtMs)) champion = candidate
+      meta.nationalChampion = champion
+    }
+    const changedNationalMeets = (update.nationalMeets || []).map(meet => {
+      const unsent = pending.map(operation => operation.type === 'heat' ? operation.payload.nationalMeet :
+        operation.type === 'patch' ? operation.payload[`dynamic/nationalMeets/${meet.id}`] : null)
+        .filter(saved => saved?.id === meet.id).at(-1)
+      const local = game.world.nationalMeets.find(saved => saved.id === meet.id)
+      return unsent || (local?.completedMatches > meet.completedMatches ? local : meet)
+    })
+    const nationalHonors = { ...game.world.nationalHonors }
+    for (const [id, honors] of Object.entries(update.nationalHonors || {})) {
+      nationalHonors[id] = [...new Map([...(nationalHonors[id] || []), ...honors].map(honor => [honor.meetId, honor])).values()]
+    }
+    for (const meet of changedNationalMeets) for (const honor of meet.grades[0].podium || []) {
+      nationalHonors[honor.studentId] = [...new Map([...(nationalHonors[honor.studentId] || []), honor].map(honor => [honor.meetId, honor])).values()]
+    }
+    if (update.nationalHonors || changedNationalMeets.length) meta.nationalHonors = nationalHonors
     if (update.binding) meta.cloudBinding = update.binding
     if (update.preferences) for (const key of ['favoriteSchoolIds', 'followedTeamIds']) {
       const flags = { ...update.preferences[key] }
@@ -386,7 +411,7 @@ async function mergeCloudData(update) {
     const savedRace = update.syncedRaceId && game.world.races.find(race => race.id === update.syncedRaceId)
     const syncedRace = savedRace?.syncStatus === 'pending' ? { ...savedRace } : null
     if (syncedRace) delete syncedRace.syncStatus
-    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards, windMeets: changedWindMeets, regionMeets: changedRegionMeets },
+    await saveChanges({ ...game.world, ...meta }, { students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards, windMeets: changedWindMeets, regionMeets: changedRegionMeets, nationalMeets: changedNationalMeets },
       { acknowledge: update.acknowledge, cache: update.cache })
     Object.assign(game.world, meta)
     for (const meet of changedWindMeets) {
@@ -398,6 +423,11 @@ async function mergeCloudData(update) {
       const index = game.world.regionMeets.findIndex(saved => saved.id === meet.id)
       if (index < 0) game.world.regionMeets.push(meet)
       else game.world.regionMeets[index] = meet
+    }
+    for (const meet of changedNationalMeets) {
+      const index = game.world.nationalMeets.findIndex(saved => saved.id === meet.id)
+      if (index < 0) game.world.nationalMeets.push(meet)
+      else game.world.nationalMeets[index] = meet
     }
     for (const student of changed.values()) Object.assign(getStudent(student.id), student)
     for (const team of changedTeams.values()) Object.assign(getTeam(team.id), team)
@@ -751,7 +781,7 @@ function applyMedals(medals) {
   Object.assign(medals.team, medals.nextTeam)
 }
 
-export async function recordHeat({ id, sessionId, schoolId, classId = null, classIds = [], teamId = null, mode = 'class', windMatchId = null, regionMatchId = null, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
+export async function recordHeat({ id, sessionId, schoolId, classId = null, classIds = [], teamId = null, mode = 'class', windMatchId = null, regionMatchId = null, nationalMatchId = null, heat, results, startedAt, finishedAt = new Date().toISOString() }) {
   return transaction(async () => {
     const existing = game.world.races.find(race => race.id === id)
     if (existing) return existing
@@ -760,18 +790,22 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
     const school = getSchool(schoolId)
     const crossClass = ['wind-selection', 'wind-practice'].includes(mode)
     const regional = mode === 'regional'
+    const championship = mode === 'national-championship'
     const savedMeet = windMatchId && game.world.windMeets.find(meet => meet.id === sessionId)
     const savedRegion = regionMatchId && game.world.regionMeets.find(meet => meet.id === sessionId)
-    const match = (savedMeet || savedRegion) && nextWindMatch(savedRegion || savedMeet)
+    const savedNational = nationalMatchId && game.world.nationalMeets.find(meet => meet.id === sessionId)
+    const match = (savedMeet || savedRegion || savedNational) && nextWindMatch(savedNational || savedRegion || savedMeet)
     const teamFlag = team && ({ school: 'isSchoolTeam', city: 'isCityTeam', national: 'isNationalTeam' }[team.type])
     const invalidParticipant = result => {
       const student = getStudent(result.studentId)
       return !student || (team
         ? !team.memberIds.includes(student.id) || !teamFlag || !student[teamFlag]
-        : regional ? !match?.studentIds.includes(student.id) || normalizeRegion(getSchool(student.schoolId)?.city) !== savedRegion?.city
+        : championship ? !match?.studentIds.includes(student.id) || !savedNational?.cities.includes(normalizeRegion(getSchool(student.schoolId)?.city))
+          : regional ? !match?.studentIds.includes(student.id) || normalizeRegion(getSchool(student.schoolId)?.city) !== savedRegion?.city
           : crossClass ? student.schoolId !== schoolId || !classIds.includes(student.classId) : !cls?.studentIds.includes(student.id))
     }
-    if (!school || (teamId ? !team : regional ? !savedRegion || savedRegion.friendly || savedRegion.schoolIds[0] !== schoolId || match?.id !== regionMatchId
+    if (!school || (teamId ? !team : championship ? !savedNational || savedNational.friendly || savedNational.schoolIds[0] !== schoolId || match?.id !== nationalMatchId
+      : regional ? !savedRegion || savedRegion.friendly || savedRegion.schoolIds[0] !== schoolId || match?.id !== regionMatchId
       : crossClass ? !classIds.length || classIds.some(id => getClass(id)?.schoolId !== schoolId) : !cls || cls.schoolId !== schoolId) ||
       (mode === 'wind-selection' && (!savedMeet || savedMeet.schoolId !== schoolId || match?.id !== windMatchId)) || !results.length || results.length > 8 ||
       new Set(results.map(result => result.studentId)).size !== results.length ||
@@ -780,9 +814,10 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
     }
     const race = {
       id, sessionId, schoolId, classId: cls?.id ?? null, teamId: team?.id ?? null, teamName: team?.name ?? null,
-      schoolName: school.name, className: regional ? savedRegion.eventName : team ? `${team.name} 隊內賽` : crossClass ? classIds.map(id => getClass(id).name).join(' vs. ') : cls.name,
+      schoolName: school.name, className: championship ? savedNational.eventName : regional ? savedRegion.eventName : team ? `${team.name} 隊內賽` : crossClass ? classIds.map(id => getClass(id).name).join(' vs. ') : cls.name,
       classColor: cls?.color ?? null,
-      heat, event: '100m', mode, classIds, ...(regional ? { regionMatchId, city: savedRegion.city, schoolIds: match.schoolIds, round: match.round }
+      heat, event: '100m', mode, classIds, ...(championship ? { nationalMatchId, cities: match.cities, schoolIds: match.schoolIds, round: match.round }
+        : regional ? { regionMatchId, city: savedRegion.city, schoolIds: match.schoolIds, round: match.round }
         : match ? { windMatchId, grade: match.grade, round: match.round } : {}), startedAt, finishedAt, syncStatus: 'pending',
       results: results.map(result => {
         const student = getStudent(result.studentId)
@@ -792,7 +827,7 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
           personalBest: previousBest100 === null || result.time < previousBest100, previousBest100,
           schoolId: student.schoolId, classId: student.classId, grade: student.grade,
           className: getClass(student.classId).name, classColor: getClass(student.classId).color,
-          schoolName: getSchool(student.schoolId).name, dateTime: finishedAt }
+          schoolName: getSchool(student.schoolId).name, city: normalizeRegion(getSchool(student.schoolId).city), dateTime: finishedAt }
       }).sort((a, b) => a.time - b.time || a.lane - b.lane).map((result, index) => ({ ...result, place: index + 1 })),
     }
     const changed = results.map(result => {
@@ -800,20 +835,27 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
       return { ...student, best100: Number.isFinite(student.best100) && student.best100 > 0 ? Math.min(student.best100, result.time) : result.time }
     })
     const rankingChanged = changed.some(student => Math.round(studentTime(student) * 100) !== Math.round(studentTime(getStudent(student.id)) * 100))
-    const medals = team || crossClass || regional ? null : medalsForClass(sessionId, classId, [...game.world.races, race])
+    const medals = team || crossClass || regional || championship ? null : medalsForClass(sessionId, classId, [...game.world.races, race])
     const nextMeet = savedMeet ? completeWindMatch(savedMeet, windMatchId, race.results, finishedAt) : null
     const nextRegion = savedRegion ? completeRegionalMatch(savedRegion, regionMatchId, race.results, finishedAt) : null
+    const nextNational = savedNational ? completeNationalMatch(savedNational, nationalMatchId, race.results, finishedAt) : null
+    const nextGod = nextNational?.grades[0].champion || null
     const nextPrince = nextRegion?.grades[0].champion || null
     const nextChampion = nextMeet?.grades.find(group => group.grade === match.grade)?.champion || null
-    const nextWorld = nextPrince ? { ...game.world, regionChampions: { ...game.world.regionChampions, [nextPrince.city]: nextPrince } }
+    const nextWorld = nextGod ? { ...game.world, nationalChampion: nextGod, nationalHonors: { ...game.world.nationalHonors } }
+      : nextPrince ? { ...game.world, regionChampions: { ...game.world.regionChampions, [nextPrince.city]: nextPrince } }
       : nextChampion ? { ...game.world, windChampions: {
       ...game.world.windChampions, [schoolId]: { ...game.world.windChampions[schoolId], [nextChampion.grade]: nextChampion },
     } } : game.world
+    if (nextGod) for (const honor of nextNational.grades[0].podium) {
+      nextWorld.nationalHonors[honor.studentId] = [...(nextWorld.nationalHonors[honor.studentId] || []).filter(saved => saved.meetId !== honor.meetId), honor]
+    }
     // Class races may award class medals; team races only update personal bests.
     await saveChanges(nextWorld, {
       students: changed, races: [race],
       ...(nextMeet ? { windMeets: [nextMeet] } : {}),
       ...(nextRegion ? { regionMeets: [nextRegion] } : {}),
+      ...(nextNational ? { nationalMeets: [nextNational] } : {}),
       ...(medals ? { awards: medals.awards, teams: [medals.nextTeam] } : {}),
     }, { enqueue: cloudOperation('heat', {
       race,
@@ -822,6 +864,7 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
       teamAwardIds: medals ? medals.nextTeam.awardIds.filter(id => !medals.team.awardIds.includes(id)) : [],
       ...(nextMeet ? { windMeet: nextMeet } : {}), ...(nextChampion ? { windChampion: nextChampion } : {}),
       ...(nextRegion ? { regionMeet: nextRegion } : {}), ...(nextPrince ? { regionChampion: nextPrince } : {}),
+      ...(nextNational ? { nationalMeet: nextNational } : {}), ...(nextGod ? { nationalChampion: nextGod } : {}),
     }) })
     for (const student of changed) Object.assign(getStudent(student.id), student)
     game.world.races.push(race)
@@ -829,6 +872,8 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
     if (nextChampion) game.world.windChampions = nextWorld.windChampions
     if (nextRegion) game.world.regionMeets[game.world.regionMeets.findIndex(meet => meet.id === nextRegion.id)] = nextRegion
     if (nextPrince) game.world.regionChampions = nextWorld.regionChampions
+    if (nextNational) game.world.nationalMeets[game.world.nationalMeets.findIndex(meet => meet.id === nextNational.id)] = nextNational
+    if (nextGod) { game.world.nationalChampion = nextGod; game.world.nationalHonors = nextWorld.nationalHonors }
     applyMedals(medals)
     if (rankingChanged) rankStudents(game.world)
     game.revision++
@@ -886,16 +931,40 @@ async function recordRegionalMatch(meet, match, results, startedAt, finishedAt) 
   return game.world.regionMeets.find(saved => saved.id === meet.id)
 }
 
+export async function createNationalMeet(cities, { friendly = false } = {}) {
+  return transaction(async () => {
+    if (autoMeet.active || windMeet.active) throw new Error('請先完成目前的自動賽程。')
+    const meet = createNationalChampionship(cities, game.world.regionMeets, getStudent, { friendly, getSchool })
+    if (!friendly) {
+      await saveChanges(game.world, { nationalMeets: [meet] }, { enqueue: cloudOperation('patch', {
+        [`dynamic/nationalMeets/${meet.id}`]: meet,
+      }) })
+      game.world.nationalMeets.push(meet)
+      game.revision++
+      queueSync()
+    }
+    return meet
+  })
+}
+
+async function recordNationalMatch(meet, match, results, startedAt, finishedAt) {
+  await recordHeat({ id: match.id, sessionId: meet.id, schoolId: meet.schoolIds[0], classIds: match.classIds,
+    mode: 'national-championship', nationalMatchId: match.id, heat: meet.completedMatches + 1, results, startedAt, finishedAt })
+  return game.world.nationalMeets.find(saved => saved.id === meet.id)
+}
+
 async function saveWindPause(meetId, paused) {
   return transaction(async () => {
-    const meet = game.world.windMeets.find(saved => saved.id === meetId) || game.world.regionMeets.find(saved => saved.id === meetId)
+    const meet = game.world.windMeets.find(saved => saved.id === meetId) || game.world.regionMeets.find(saved => saved.id === meetId) || game.world.nationalMeets.find(saved => saved.id === meetId)
     if (!meet || meet.status !== 'running') return
     const next = { ...meet, paused }
     const regional = meet.kind === 'regional'
-    await saveChanges(game.world, { [regional ? 'regionMeets' : 'windMeets']: [next] }, { enqueue: cloudOperation('patch', {
-      [regional ? `dynamic/regionMeets/${meet.city}/${meet.id}` : `dynamic/windMeets/${meet.schoolId}/${meet.id}`]: next,
+    const national = meet.kind === 'national-championship'
+    const table = national ? 'nationalMeets' : regional ? 'regionMeets' : 'windMeets'
+    await saveChanges(game.world, { [table]: [next] }, { enqueue: cloudOperation('patch', {
+      [national ? `dynamic/nationalMeets/${meet.id}` : regional ? `dynamic/regionMeets/${meet.city}/${meet.id}` : `dynamic/windMeets/${meet.schoolId}/${meet.id}`]: next,
     }) })
-    const collection = regional ? game.world.regionMeets : game.world.windMeets
+    const collection = game.world[table]
     collection[collection.indexOf(meet)] = next
     game.revision++
     queueSync()

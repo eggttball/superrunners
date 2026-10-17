@@ -1,6 +1,7 @@
 import { shallowReactive } from 'vue'
 import { nextWindMatch } from './wind-selection.js'
 import { completeRegionalMatch } from './regional-selection.js'
+import { completeNationalMatch } from './national-championship.js'
 import { createMeetClock } from './meet-clock.js'
 import { createSprintProfile } from './physics.js'
 import { setMusicMode, playCountdown, playStartWhistle } from './audio.js'
@@ -96,17 +97,18 @@ async function finishNationalSchool(at) {
 function prepare(at) {
   const match = nextWindMatch(windMeet.meet)
   if (!match) return false
-  const dramaticFinal = windMeet.meet.kind === 'regional' && !windMeet.meet.friendly && match.final
+  const dramaticFinal = match.final && (windMeet.meet.kind === 'national-championship' || (windMeet.meet.kind === 'regional' && !windMeet.meet.friendly))
   Object.assign(windMeet, { match, athletes: match.studentIds.map(id => {
     const student = dependencies.getStudent(id)
     return { student: { ...student }, profile: createSprintProfile(student) }
   }), friendly: false, elapsed: -3, phase: 'countdown', startedAt: new Date(at).toISOString(), finishedAt: '', error: '' })
   if (dramaticFinal && !windMeet.paused) {
     windMeet.paused = true
-    clock.pause()
+    // Discard any background catch-up time so resuming starts this countdown fresh.
+    clock.stop()
     saveControl()
   }
-  windMeet.stage = windMeet.scope === 'regional' ? 'regional' : 'school'
+  windMeet.stage = ['regional', 'championship'].includes(windMeet.scope) ? windMeet.scope : 'school'
   cue = 3
   if (!windMeet.paused && recentCue(at)) playCountdown(3)
   return true
@@ -147,7 +149,7 @@ async function finishFriendship(at) {
 export function startWindMeet(meet, speed = 1) {
   endedAt = 0
   Object.assign(windMeet, { active: true, meet, speed, paused: false, friendly: false, friendshipResults: [],
-    scope: meet.kind === 'regional' ? 'regional' : 'school', runId: meet.id, schoolIds: [], schoolIndex: 0, completedSchools: 0, completedMatches: 0, totalMatches: 0 })
+    scope: meet.kind === 'national-championship' ? 'championship' : meet.kind === 'regional' ? 'regional' : 'school', runId: meet.id, schoolIds: [], schoolIndex: 0, completedSchools: 0, completedMatches: 0, totalMatches: 0 })
   setMusicMode('race')
   prepare(clock.start(speed))
 }
@@ -156,7 +158,7 @@ export function restoreWindMeet(meet) {
   if (!meet) return
   endedAt = 0
   Object.assign(windMeet, { active: true, meet, speed: 1, paused: true, friendly: false, friendshipResults: [],
-    scope: meet.kind === 'regional' ? 'regional' : 'school', runId: meet.id, schoolIds: [], schoolIndex: 0 })
+    scope: meet.kind === 'national-championship' ? 'championship' : meet.kind === 'regional' ? 'regional' : 'school', runId: meet.id, schoolIds: [], schoolIndex: 0 })
   prepare(performance.timeOrigin + performance.now())
 }
 
@@ -215,6 +217,11 @@ export function toggleWindMeetPause() {
   if (!windMeet.paused) { pauseWindMeet(); return }
   windMeet.paused = false
   windMeet.error = ''
+  if (windMeet.phase === 'countdown' && windMeet.elapsed === -3) {
+    const at = performance.timeOrigin + performance.now()
+    windMeet.startedAt = new Date(at).toISOString()
+    if (recentCue(at)) playCountdown(3)
+  }
   clock.resume()
   setMusicMode('race')
   saveControl()
@@ -236,10 +243,11 @@ async function saveMatch() {
     const results = windMeet.athletes.map((athlete, index) => ({ studentId: athlete.student.id,
       name: athlete.student.name, schoolId: athlete.student.schoolId, schoolName: dependencies.getSchool(athlete.student.schoolId).name,
       classId: athlete.student.classId, className: dependencies.getClass(athlete.student.classId).name,
+      city: dependencies.getSchool(athlete.student.schoolId).city,
       grade: athlete.student.grade, lane: index + 1, time: athlete.profile.time }))
     const finishedAt = windMeet.finishedAt || new Date().toISOString()
-    const meet = windMeet.meet.kind === 'regional' && windMeet.meet.friendly
-      ? completeRegionalMatch(windMeet.meet, windMeet.match.id, results, finishedAt)
+    const meet = ['regional', 'national-championship'].includes(windMeet.meet.kind) && windMeet.meet.friendly
+      ? (windMeet.meet.kind === 'national-championship' ? completeNationalMatch : completeRegionalMatch)(windMeet.meet, windMeet.match.id, results, finishedAt)
       : await dependencies.saveMatch(windMeet.meet, windMeet.match, results, windMeet.startedAt, finishedAt)
     if (!windMeet.active || windMeet.runId !== runId) return false
     windMeet.meet = meet
@@ -250,7 +258,7 @@ async function saveMatch() {
       if (!windMeet.active || windMeet.runId !== runId) return false
     }
     if (meet.status === 'complete') {
-      if (meet.kind === 'regional') finishSelection()
+      if (['regional', 'national-championship'].includes(meet.kind)) finishSelection()
       else if (!prepareFriendship(endedAt || performance.timeOrigin + performance.now())) {
         if (national) return finishNationalSchool(endedAt || performance.timeOrigin + performance.now())
         finishSelection()

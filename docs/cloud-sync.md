@@ -68,6 +68,13 @@ users/{uid}/
       teamAwards/{teamId}/{awardId}: true
       windMeets/{schoolId}/{meetId}  選拔對戰歷程與歷屆冠軍
       windChampions/{schoolId}/{grade}  現任風速小子
+      regionMeets/{city}/{meetId}    區域賽歷程及前三名
+      regionRaces/{city}/{raceId}    區域賽逐場成績
+      regionChampions/{city}        現任風速王子
+      nationalMeets/{meetId}        全國大賽歷程及決賽前六名
+      nationalRaces/{raceId}        全國大賽逐場成績
+      nationalChampion             唯一現任風神
+      nationalHonors/{studentId}/{meetId}  個人歷屆全國決賽名次
     rankings/
       class/{classId}/{studentId}: { time, best100 }
       grade/{schoolId}/{grade}/{studentId}: { time, best100 }
@@ -81,7 +88,7 @@ users/{uid}/
 
 ## 寫入、斷線與重試
 
-IndexedDB object store 版本目前為 `4`，原本資料格式 `schemaVersion: 3` 與資料庫名稱不變。新增：
+IndexedDB object store 版本目前為 `5`，原本資料格式 `schemaVersion: 3` 與資料庫名稱不變。新增：
 
 - `outbox`：尚未收到雲端確認的動作，包含 `id`、`uid`、`worldId`、`type`、`payload`、`createdAt`。不含任何登入 token。
 - `cloudCache`：按查詢範圍保存的動態快照，包含 `id`、`updatedAt`、`data`。
@@ -143,3 +150,14 @@ dynamic/regionChampions/{city}         唯一現任風速王子
 王子索引與校內風速小子完全獨立：每次校內選拔不改王子，只有下一屆縣市正式決賽替換。友誼賽只存在當次頁面記憶體，不送出任何正式紀錄或個人最佳。
 
 現任風速王子另附 `awardedAtMs` 決賽完成時間。同步前讀取目前王子，較舊離線決賽只上傳歷史成績，不替換較新的王子；規則也驗證時間不得倒退，若別台裝置搶先更新會重讀並重試。
+
+
+## 全國大賽與個人決賽榮譽
+
+IndexedDB v5 新增 `nationalMeets`，保留固定世界與既有進度。世界與雲端 schemaVersion 維持 3／1；新動態路徑如上。
+
+進入全國大賽或準備開賽時，`fetchRegionalDelegations()` 先讀各縣市現任冠軍，再依 `meetId` 只讀該屆區域賽歷程，不下載歷屆所有區域樹、區域賽逐場成績或學生固定資料。`fetchNationalHistory()` 讀全國歷程、現任風神及全國逐場成績，用於淘汰樹第一輪時間與歷史總覽。個人頁額外只讀 `nationalHonors/{studentId}` 與現任風神，無須下載全部學生榮譽。
+
+每場正式全國賽的 `heat` outbox 動作帶有 `nationalMeet`，最後決賽另帶 `nationalChampion`。同一筆多路徑 PATCH 寫入 `nationalRaces`、`nationalMeets`、參賽者最佳成績與四種排名。決賽同時將前六名分別寫到 `nationalHonors/{studentId}/{meetId}`，保存稱號／名次及時間快照；友誼賽不入 outbox、不寫雲端。
+
+現任風神以 `awardedAtMs` 防止舊離線決賽覆蓋較新冠軍；舊場次仍補傳為歷史紀錄。所有新增路徑仍須管理者的 Auth UID、Email 及 worldId 驗證；`nationalMeets` 僅接受正式賽，成績／榮譽至少 10 秒，跑道及決賽名次限制為 1～6。規則隨 GitHub Actions 在 Hosting 前部署。

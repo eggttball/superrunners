@@ -123,6 +123,35 @@
                     ".validate": "$grade.matches(/^[1-3]$/) && newData.hasChildren(['studentId', 'classId', 'grade', 'time', 'meetId', 'awardedAt']) && newData.child('time').isNumber() && newData.child('time').val() >= 10"
                   }
                 }
+              },
+              "nationalMeets": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$meetId": {
+                  ".validate": "newData.hasChildren(['id', 'kind', 'status', 'grades', 'cities', 'schoolIds', 'startedAt']) && newData.child('id').val() === $meetId && newData.child('kind').val() === 'national-championship' && newData.child('friendly').val() === false && (newData.child('status').val() === 'running' || newData.child('status').val() === 'complete')"
+                }
+              },
+              "nationalChampion": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                ".validate": "newData.hasChildren(['studentId', 'schoolId', 'classId', 'city', 'time', 'meetId', 'title', 'awardedAt', 'awardedAtMs']) && newData.child('title').val() === '風神' && newData.child('time').isNumber() && newData.child('time').val() >= 10 && newData.child('awardedAtMs').isNumber() && (!data.exists() || newData.child('awardedAtMs').val() >= data.child('awardedAtMs').val())"
+              },
+              "nationalRaces": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$raceId": {
+                  ".validate": "newData.hasChildren(['id', 'sessionId', 'nationalMatchId', 'results', 'finishedAt']) && newData.child('id').val() === $raceId && newData.child('mode').val() === 'national-championship' && newData.child('results').hasChild('0') && (!data.exists() || newData.child('finishedAt').val() === data.child('finishedAt').val())",
+                  "results": {
+                    "$index": {
+                      ".validate": "$index.matches(/^[0-5]$/) && newData.hasChildren(['studentId', 'schoolId', 'classId', 'city', 'time', 'lane', 'place']) && newData.child('time').isNumber() && newData.child('time').val() >= 10 && newData.child('lane').isNumber() && newData.child('lane').val() >= 1 && newData.child('lane').val() <= 6 && newData.child('place').isNumber() && newData.child('place').val() >= 1 && newData.child('place').val() <= 6"
+                    }
+                  }
+                }
+              },
+              "nationalHonors": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$studentId": {
+                  "$meetId": {
+                    ".validate": "newData.hasChildren(['studentId', 'schoolId', 'classId', 'city', 'time', 'place', 'meetId', 'awardedAt', 'awardedAtMs']) && newData.child('studentId').val() === $studentId && newData.child('meetId').val() === $meetId && newData.child('time').isNumber() && newData.child('time').val() >= 10 && newData.child('place').isNumber() && newData.child('place').val() >= 1 && newData.child('place').val() <= 6 && newData.child('awardedAtMs').isNumber()"
+                  }
+                }
               }
             },
             "rankings": {

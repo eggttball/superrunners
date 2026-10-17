@@ -14,7 +14,7 @@ export function schoolRepresentatives(school, getStudent, champions = {}) {
   }).filter(Boolean)
 }
 
-function createRound(id, number, entrants) {
+export function createRepresentativeRound(id, number, entrants) {
   const isFinal = entrants.length <= 2
   const matches = []
   for (let index = 0; index < entrants.length; index += 2) {
@@ -24,6 +24,7 @@ function createRound(id, number, entrants) {
     matches.push({ id: `${id}-r${number}-m${index / 2 + 1}`, grade: 0, round: number,
       number: index / 2 + 1, final: isFinal, studentIds: qualifiers.map(result => result.studentId),
       schoolIds: [...new Set(qualifiers.map(result => result.schoolId))],
+      cities: [...new Set(qualifiers.map(result => result.city).filter(Boolean))],
       classIds: [...new Set(qualifiers.map(result => result.classId))],
       classNames: [...new Set(qualifiers.map(result => result.className))],
       status: bye ? 'bye' : 'pending', topThree: bye ? qualifiers : [],
@@ -44,7 +45,7 @@ export function createRegionalMeet(city, schools, getStudent, champions, getClas
     }).filter(entry => entry.studentIds.length)
   if (!entrants.length) throw new Error('這個縣市目前沒有可參賽的學校。')
   if (friendly && entrants.length < 2) throw new Error('友誼賽請至少選擇兩所學校。')
-  let firstRound = createRound(id, 1, entrants)
+  let firstRound = createRepresentativeRound(id, 1, entrants)
   if (friendly) {
     const qualifiers = entrants.flatMap(entry => entry.qualifiers)
     firstRound = { number: 1, isFinal: false, matches: [] }
@@ -95,7 +96,7 @@ export function completeRegionalMatch(meet, matchId, results, finishedAt) {
       next.status = 'complete'
       next.finishedAt = finishedAt
       next.paused = false
-    } else group.rounds.push(createRound(meet.id, round.number + 1,
+    } else group.rounds.push(createRepresentativeRound(meet.id, round.number + 1,
       round.matches.map(match => ({ qualifiers: match.topThree }))))
   }
   return next

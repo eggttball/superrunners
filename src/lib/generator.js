@@ -225,6 +225,7 @@ export function generateWorld(catalog, { seed = 'superrunners-tw-115-v3', create
     createdAt, seed,
     source: { name: '教育部學校名錄', note: '學校名稱為真實公開資料；學生、能力與成績皆為虛構。' },
     schools: [], students: [], teams: [], races: [], awards: [], windMeets: [], windChampions: {}, regionMeets: [], regionChampions: {},
+    nationalMeets: [], nationalChampion: null, nationalHonors: {},
     favoriteSchoolIds: [], followedTeamIds: [], settings: { muted: false },
   }
   onProgress?.({ phase: 'population', completed: 0, total: catalog.length, students: 0, progress: 0 })

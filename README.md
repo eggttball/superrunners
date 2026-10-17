@@ -63,7 +63,7 @@ npm run update:schools
 
 ## 存檔與完整 JSON 匯出
 
-存檔保存在目前瀏覽器、目前網站來源的 IndexedDB，資料庫名為 `superrunners-taiwan-v3`。object store 版本為 2，保留原有 `meta`、`schools`、`students`、`teams`、`races`、`awards`，新增 `outbox` 與 `cloudCache`。本機變更與待同步動作在同一筆交易保存；收藏、關注、隊籍、綽號及每組成績會補傳到 Realtime Database。全班最後一組同時記錄獎牌及隊伍獎項。固定資料只在首次還原時下載；班級／年級／全校排名依操作取得，全國排名在雲端限制前 300 人，維持每頁 100 人。重新開啟與恢復連線會補傳未完成動作。
+存檔保存在目前瀏覽器、目前網站來源的 IndexedDB，資料庫名為 `superrunners-taiwan-v3`。object store 版本為 5，保留既有資料，包含 `meta`、`schools`、`students`、`teams`、`races`、`awards`、`windMeets`、`regionMeets`、`nationalMeets`、`outbox` 與 `cloudCache`。本機變更與待同步動作在同一筆交易保存；收藏、關注、隊籍、綽號及每組成績會補傳到 Realtime Database。全班最後一組同時記錄獎牌及隊伍獎項。固定資料只在首次還原時下載；班級／年級／全校排名依操作取得，全國排名在雲端限制前 300 人，維持每頁 100 人。重新開啟與恢復連線會補傳未完成動作。
 
 畫面上的匯出按鈕會下載 `superrunners-tw-YYYY-MM-DD.json`，包含目前本機世界快照，日期時間為 ISO 字串。按需同步不會在匯出時重新下載所有學校歷史，因此尚未讀取的其他裝置變更可能不在此檔案中；同步控制用的 `outbox` 與 `cloudCache` 不列入匯出。目前沒有 JSON 匯入介面。瀏覽器與網址／連接埠不同時使用不同的本機快取，但同一管理者連結同一份雲端世界。
 
@@ -81,6 +81,9 @@ JSON 的 `schemaVersion` 為 `3`，最上層結構如下：
 | `teams` | 所有隊伍、成員與獎項關聯 |
 | `races` | 已保存的分組賽事及選手結果快照 |
 | `awards` | 已頒發的個人獎牌紀錄 |
+| `windMeets`, `windChampions` | 校內風速小子選拔歷程與現任年級冠軍 |
+| `regionMeets`, `regionChampions` | 區域淘汰賽歷程與現任風速王子 |
+| `nationalMeets`, `nationalChampion`, `nationalHonors` | 全國大賽歷程、現任風神與個人歷屆決賽前六名 |
 | `favoriteSchoolIds` | 收藏學校的 ID 陣列 |
 | `followedTeamIds` | 關注隊伍的 ID 陣列 |
 | `settings` | `{ muted: boolean }` |

@@ -2,7 +2,7 @@ import { shallowReactive } from 'vue'
 import { auth, ADMIN_EMAIL } from './auth.js'
 import { databaseURL } from './firebase.js'
 import { pendingOperations } from './storage.js'
-import { CLOUD_SCHEMA, emptyDynamicStudent, flagIds, idFlags, putScores, schoolUpload, sortedScores, staticMetadata, values, worldIdentity } from './cloud-schema.js'
+import { CLOUD_SCHEMA, cloudRacePath, emptyDynamicStudent, flagIds, idFlags, putScores, schoolUpload, sortedScores, staticMetadata, values, worldIdentity } from './cloud-schema.js'
 import { normalizeRegion } from './regional-selection.js'
 
 export const syncState = shallowReactive({ ready: false, busy: false, pending: 0, error: '', phase: '', progress: 0 })
@@ -137,6 +137,7 @@ export async function restoreCloud(onProgress) {
   const meta = await request(`${rootPath()}/static/meta`)
   const schoolKeys = await request(`${rootPath()}/uploaded`)
   const world = { ...meta, cloudBinding: { ...context }, schools: [], students: [], teams: [], races: [], awards: [], windMeets: [], windChampions: {}, regionMeets: [], regionChampions: {},
+    nationalMeets: [], nationalChampion: null, nationalHonors: {},
     favoriteSchoolIds: [], followedTeamIds: [], settings: { muted: false } }
   const ids = Object.keys(schoolKeys || {}).filter(id => id !== '_meta')
   if (ids.length !== manifest.schoolCount) throw new Error('雲端固定資料不完整，已停止還原。')
@@ -176,6 +177,14 @@ export async function restoreCloud(onProgress) {
   ])
   world.regionMeets = values(regionMeets).flatMap(meets => values(meets).map(normalizeWindMeet))
   world.regionChampions = regionChampions || {}
+  const [nationalMeets, nationalChampion, nationalRaces, nationalHonors] = await Promise.all([
+    request(`${rootPath()}/dynamic/nationalMeets`), request(`${rootPath()}/dynamic/nationalChampion`),
+    request(`${rootPath()}/dynamic/nationalRaces`), request(`${rootPath()}/dynamic/nationalHonors`),
+  ])
+  world.nationalMeets = values(nationalMeets).map(normalizeWindMeet)
+  world.nationalChampion = nationalChampion
+  world.nationalHonors = Object.fromEntries(Object.entries(nationalHonors || {}).map(([id, honors]) => [id, values(honors)]))
+  world.races.push(...values(nationalRaces).map(race => ({ ...race, results: values(race.results) })))
   world.races.push(...values(regionRaces).flatMap(races => values(races).map(race => ({ ...race, results: values(race.results) }))))
   const byId = new Map(world.students.map(student => [student.id, student]))
   for (const race of world.races) for (const result of race.results) {
@@ -201,15 +210,16 @@ async function sendOperation(operation) {
     return {}
   }
   if (type !== 'heat') throw new Error('無法辨識待同步資料類型。')
-  const { race, students, awards, teamId, teamAwardIds, windMeet, windChampion, regionMeet, regionChampion } = payload
+  const { race, students, awards, teamId, teamAwardIds, windMeet, windChampion, regionMeet, regionChampion, nationalMeet, nationalChampion } = payload
   const cloudRace = { ...race }
   delete cloudRace.syncStatus
   for (let attempt = 0; attempt < 4; attempt++) {
-    const [bests, savedPrince] = await Promise.all([
+    const [bests, savedPrince, savedGod] = await Promise.all([
       Promise.all(students.map(student => request(`${rootPath()}/dynamic/bests/${student.id}`))),
       regionChampion ? request(`${rootPath()}/dynamic/regionChampions/${regionChampion.city}`) : Promise.resolve(null),
+      nationalChampion ? request(`${rootPath()}/dynamic/nationalChampion`) : Promise.resolve(null),
     ])
-    const patch = { [race.mode === 'regional' ? `dynamic/regionRaces/${race.city}/${race.id}` : `dynamic/races/${race.schoolId}/${race.id}`]: cloudRace }
+    const patch = { [cloudRacePath(race)]: cloudRace }
     const savedBests = []
     for (let index = 0; index < students.length; index++) {
       const student = students[index]
@@ -223,14 +233,21 @@ async function sendOperation(operation) {
     if (windMeet) patch[`dynamic/windMeets/${windMeet.schoolId}/${windMeet.id}`] = windMeet
     if (windChampion) patch[`dynamic/windChampions/${race.schoolId}/${windChampion.grade}`] = windChampion
     if (regionMeet) patch[`dynamic/regionMeets/${regionMeet.city}/${regionMeet.id}`] = regionMeet
+    if (nationalMeet) {
+      patch[`dynamic/nationalMeets/${nationalMeet.id}`] = nationalMeet
+      for (const honor of nationalMeet.grades[0].podium || []) patch[`dynamic/nationalHonors/${honor.studentId}/${honor.meetId}`] = honor
+    }
     // An older offline final remains a historical race, but cannot replace a
     // prince crowned by a newer final on another device.
     const latestPrince = regionChampion && (!savedPrince || (regionChampion.awardedAtMs ?? Date.parse(regionChampion.awardedAt)) >=
       (savedPrince.awardedAtMs ?? Date.parse(savedPrince.awardedAt))) ? regionChampion : savedPrince
     if (regionChampion && latestPrince === regionChampion) patch[`dynamic/regionChampions/${regionChampion.city}`] = regionChampion
+    const latestGod = nationalChampion && (!savedGod || nationalChampion.awardedAtMs >= savedGod.awardedAtMs) ? nationalChampion : savedGod
+    if (nationalChampion && latestGod === nationalChampion) patch['dynamic/nationalChampion'] = nationalChampion
     try {
       await request(rootPath(), { method: 'PATCH', data: patch })
-      return { bests: savedBests, ...(regionChampion ? { regionChampions: { [regionChampion.city]: latestPrince } } : {}) }
+      return { bests: savedBests, ...(regionChampion ? { regionChampions: { [regionChampion.city]: latestPrince } } : {}),
+        ...(nationalChampion ? { nationalChampion: latestGod } : {}) }
     } catch (error) {
       // Rules reject stale writes that would make a personal best slower.
       if (attempt === 3 || ![401, 403].includes(error.status)) throw error
@@ -354,12 +371,13 @@ export function fetchHistory(schoolId) {
 export function fetchStudent(student, teamId) {
   return scopedRead(`student:${student.id}`, async () => {
     const city = normalizeRegion(currentWorld().schools.find(school => school.id === student.schoolId).city)
-    const [profile, best100, isSchoolTeam, champions, prince] = await Promise.all([request(`${rootPath()}/dynamic/profiles/${student.id}`),
+    const [profile, best100, isSchoolTeam, champions, prince, god, honors] = await Promise.all([request(`${rootPath()}/dynamic/profiles/${student.id}`),
       request(`${rootPath()}/dynamic/bests/${student.id}`), request(`${rootPath()}/dynamic/rosters/${teamId}/${student.id}`), request(`${rootPath()}/dynamic/windChampions/${student.schoolId}`),
-      request(`${rootPath()}/dynamic/regionChampions/${city}`)])
+      request(`${rootPath()}/dynamic/regionChampions/${city}`), request(`${rootPath()}/dynamic/nationalChampion`),
+      request(`${rootPath()}/dynamic/nationalHonors/${student.id}`)])
     return { profiles: [{ id: student.id, nickname: '', isCityTeam: false, isNationalTeam: false, ...profile, best100: best100 ?? null, isSchoolTeam: !!isSchoolTeam }],
       schoolChampions: { schoolId: student.schoolId, champions: champions || {} },
-      regionChampions: { [city]: prince || null } }
+      regionChampions: { [city]: prince || null }, nationalChampion: god, nationalHonors: { [student.id]: values(honors) } }
   })
 }
 
@@ -371,8 +389,32 @@ function normalizeWindMeet(meet) {
     rounds: values(group.rounds).map(round => ({ ...round, matches: values(round.matches).map(match => ({ ...match,
       classIds: values(match.classIds), classNames: values(match.classNames), studentIds: values(match.studentIds),
       topThree: values(match.topThree), ...(match.schoolIds ? { schoolIds: values(match.schoolIds) } : {}),
+      ...(match.cities ? { cities: values(match.cities) } : {}), ...(match.results ? { results: values(match.results) } : {}),
     })) })),
-  })), ...(meet.schoolIds ? { schoolIds: values(meet.schoolIds) } : {}) }
+  })), ...(meet.schoolIds ? { schoolIds: values(meet.schoolIds) } : {}), ...(meet.cities ? { cities: values(meet.cities) } : {}) }
+}
+
+export function fetchNationalChampion() {
+  return scopedRead('national-champion', async () => ({ nationalChampion: await request(`${rootPath()}/dynamic/nationalChampion`) }))
+}
+
+export function fetchRegionalDelegations() {
+  return scopedRead('regional-delegations', async () => {
+    const champions = await request(`${rootPath()}/dynamic/regionChampions`)
+    // Fetch only the reigning champions' editions, not every historical regional bracket.
+    const meets = await Promise.all(Object.entries(champions || {}).map(async ([city, champion]) =>
+      champion.meetId ? request(`${rootPath()}/dynamic/regionMeets/${city}/${champion.meetId}`) : null))
+    return { regionChampions: champions || {}, regionMeets: meets.filter(Boolean).map(normalizeWindMeet) }
+  })
+}
+
+export function fetchNationalHistory() {
+  return scopedRead('national-history', async () => {
+    const [meets, champion, races] = await Promise.all([request(`${rootPath()}/dynamic/nationalMeets`),
+      request(`${rootPath()}/dynamic/nationalChampion`), request(`${rootPath()}/dynamic/nationalRaces`)])
+    return { nationalMeets: values(meets).map(normalizeWindMeet), nationalChampion: champion,
+      races: values(races).map(race => ({ ...race, results: values(race.results) })) }
+  })
 }
 
 export function fetchWindChampions(schoolId) {

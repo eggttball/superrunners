@@ -12,9 +12,9 @@ const menus = [
   { id: 'teams', title: '我的隊伍', sub: '集合！你的明日之星', color: '#8260d9', gender: '男', tag: 'TEAM' },
   { id: 'schools', title: '學校資料', sub: '下一位飛毛腿，會在哪裡？', color: '#327dcc', gender: '女', tag: 'MAP' },
   { id: 'region', title: '區域比賽', sub: '挑戰縣市最速王冠！', color: '#e46a39', gender: '男', tag: 'CUP' },
+  { id: 'national', title: '全國大賽', sub: '集結最速跑者，爭奪風神！', color: '#db9e25', gender: '女', tag: 'GOD' },
 ]
 const upcoming = [
-  { title: '全國大賽', icon: 'trophy' },
   { title: '資助隊伍', icon: 'heart' },
   { title: '設定', icon: 'settings' },
 ]
