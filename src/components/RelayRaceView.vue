@@ -17,6 +17,29 @@ const match = computed(() => relayMeet.match)
 const school = computed(() => getSchool(meet.value?.schoolId))
 const state = computed(() => relayRaceState(relayMeet.plans || [], Math.max(0, relayMeet.elapsed)))
 const teams = computed(() => state.value.teams)
+const classBests = computed(() => {
+  game.revision
+  const bests = new Map()
+  for (const race of game.world?.relayRaces || []) {
+    if (race.schoolId !== meet.value?.schoolId || race.friendly) continue
+    for (const result of race.results || []) {
+      if (Number.isFinite(result.time) && result.time > 0 && result.time < (bests.get(result.classId) ?? Infinity)) bests.set(result.classId, result.time)
+    }
+  }
+  return bests
+})
+const teamDetails = computed(() => teams.value.map(team => {
+  const plan = relayMeet.plans.find(item => item.classId === team.classId)
+  const currentRunner = plan?.legs?.[team.legIndex]?.student || getStudent(team.studentId)
+  const nextRunner = !team.finished && plan?.legs?.[team.legIndex + 1]?.student
+  const holder = state.value.runners.find(runner => runner.classId === team.classId && runner.baton && runner.role === 'active')
+  return { ...team, currentRunner, nextRunner,
+    currentLane: holder ? Math.max(1, Math.min(8, Math.floor(holder.trackLane + .5))) : team.finished ? null : team.lane,
+    classBest: classBests.value.get(team.classId) }
+}))
+function personalBest(student) {
+  return Number.isFinite(student?.best100) && student.best100 > 0 ? `${timeText(student.best100)}s` : '尚無紀錄'
+}
 const selectedTeam = computed(() => teams.value.find(team => team.classId === selectedClassId.value) || teams.value[0])
 const selectedEntrant = computed(() => meet.value?.entrants?.find(entry => entry.classId === selectedTeam.value?.classId))
 const selectedPlan = computed(() => (relayMeet.plans || []).find(plan => plan.classId === selectedTeam.value?.classId))
@@ -82,11 +105,16 @@ function legState(legIndex) {
       <p v-if="relayMeet.error" class="data-note" role="alert">{{ relayMeet.error }}</p>
 
       <div class="relay-team-cards" aria-label="各班即時接力成績">
-        <button type="button" v-for="team in teams" :key="team.classId" class="relay-team-card" :class="{ selected: selectedTeam?.classId === team.classId, finished: team.finished }" :style="{ '--team-color': team.color }" :aria-pressed="selectedTeam?.classId === team.classId" @click="selectedClassId = team.classId">
-          <div class="relay-team-card-top"><span class="lane-label">起跑道次 <b>{{ team.lane }}</b></span><span v-if="team.place" class="live-rank" :class="rankClass(team.place)">{{ team.finished ? '完賽' : '目前' }}第 {{ team.place }} 名</span></div>
+        <button type="button" v-for="team in teamDetails" :key="team.classId" class="relay-team-card" :class="{ selected: selectedTeam?.classId === team.classId, finished: team.finished }" :style="{ '--team-color': team.color }" :aria-pressed="selectedTeam?.classId === team.classId" @click="selectedClassId = team.classId">
+          <div class="relay-team-card-top"><span class="lane-label">{{ team.finished ? '已完賽' : '目前跑道' }} <b v-if="team.currentLane">{{ team.currentLane }}</b></span><span v-if="team.place" class="live-rank" :class="rankClass(team.place)">{{ team.finished ? '完賽' : '目前' }}第 {{ team.place }} 名</span></div>
           <div class="relay-team-portrait"><PixelRunner :seed="String(team.studentId || team.classId)" :gender="runnerFor(team)?.gender" :height="runnerFor(team)?.height" :weight="runnerFor(team)?.weight" :color="team.color" :size="45" /><span>{{ team.finished ? 'FINISH' : '第 ' + (team.legIndex + 1) + ' 棒' }}</span></div>
           <strong>{{ className(team) }}<RelayTitleBadge :class-id="team.classId" compact /></strong>
-          <small>{{ team.finished ? '16 棒全員完成' : runnerFor(team)?.name || '接力跑者' }}<em v-if="team.exchange && !team.finished">交棒中</em></small>
+          <div class="relay-runner-details">
+            <div><span>{{ team.finished ? '末棒跑者' : '目前持棒' }}<em v-if="team.exchange && !team.finished">交棒中</em></span><strong>{{ team.currentRunner?.name || '接力跑者' }}</strong><small>百米最佳 <b class="mono">{{ personalBest(team.currentRunner) }}</b></small></div>
+            <div v-if="team.nextRunner" class="relay-next-runner"><span>下一棒 · 第 {{ team.legIndex + 2 }} 棒</span><strong>{{ team.nextRunner.name }}</strong><small>百米最佳 <b class="mono">{{ personalBest(team.nextRunner) }}</b></small></div>
+            <div v-else class="relay-next-runner"><span>{{ team.finished ? '16 棒全員完成' : '最後一棒 · 衝向終點' }}</span></div>
+          </div>
+          <div class="relay-class-best"><span>班級最佳接力</span><b class="mono">{{ team.classBest != null ? timeText(team.classBest) + 's' : '尚無紀錄' }}</b></div>
           <div class="relay-team-progress"><i :style="{ width: Math.min(100, team.distance / 16) + '%' }"></i></div>
           <div class="relay-team-distance"><span>{{ Math.min(1600, Math.floor(team.distance)) }}<small> / 1600m</small></span><b class="mono">{{ team.finished ? timeText(team.time) + 's' : '—' }}</b></div>
         </button>
@@ -125,6 +153,14 @@ function legState(legIndex) {
 .relay-team-card > strong { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 .relay-team-card > small { color: #637879; font-size: 11px; }
 .relay-team-card em { margin-left: 7px; padding: 2px 5px; background: #ffd875; color: #854625; border-radius: 3px; font-size: 10px; font-style: normal; font-weight: 800; }
+.relay-runner-details { display: grid; gap: 8px; }
+.relay-runner-details > div { display: grid; gap: 4px; }
+.relay-runner-details span, .relay-runner-details small { font-size: 11px; color: #637879; }
+.relay-runner-details strong { font-size: 14px; }
+.relay-runner-details small b { color: #263c59; }
+.relay-next-runner { padding-top: 8px; border-top: 1px dashed #c5c8ac; min-height: 52px; }
+.relay-class-best { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px; padding: 7px 8px; background: #f0e7c9; border-radius: 4px; font-size: 11px; }
+.relay-class-best b { color: #87532c; }
 .relay-team-progress { height: 5px; overflow: hidden; background: #d8e4d0; border-radius: 2px; }
 .relay-team-progress i { display: block; height: 100%; background: #da785b; }
 .relay-team-distance { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; }

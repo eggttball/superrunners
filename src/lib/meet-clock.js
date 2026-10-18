@@ -85,18 +85,19 @@ export function createMeetClock(onTick) {
     stop,
     // Preserve each interval's rate and wall-clock position. Speed changes,
     // pauses and delayed callbacks can never rewrite previously elapsed time.
-    take(maxSeconds) {
+    take(maxSeconds, { realtime = false } = {}) {
       let seconds = 0, at = null
       while (segments.length && seconds < maxSeconds) {
         const segment = segments[0]
-        const available = (segment.end - segment.start) / 1000 * segment.rate
+        const effectiveRate = realtime ? 1 : segment.rate
+        const available = (segment.end - segment.start) / 1000 * effectiveRate
         const amount = Math.min(maxSeconds - seconds, available)
         seconds += amount
         if (amount === available) {
           at = epoch(segment.end)
           segments.shift()
         } else {
-          segment.start += amount / segment.rate * 1000
+          segment.start += amount / effectiveRate * 1000
           at = epoch(segment.start)
         }
       }

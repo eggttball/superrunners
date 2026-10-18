@@ -189,7 +189,7 @@ async function advance() {
     let transitions = 0
     while (relayMeet.active && !relayMeet.paused && transitions++ < 12) {
       const end = relayMeet.phase === 'countdown' ? 0 : maxTime() + 3.2
-      const tick = clock.take(Math.max(0, end - relayMeet.elapsed))
+      const tick = clock.take(Math.max(0, end - relayMeet.elapsed), { realtime: relayMeet.phase === 'countdown' })
       relayMeet.elapsed += tick.seconds
       if (relayMeet.phase === 'countdown') {
         const remaining = Math.ceil(-relayMeet.elapsed)

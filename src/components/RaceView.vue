@@ -206,7 +206,7 @@ async function enterRelayRace() {
   const ids = [...selectedClasses.value]
   startingRelayMeet.value = true
   try {
-    try { await Promise.all([fetchRanking('school', { schoolId }), fetchRelayLineups(schoolId)]) }
+    try { await Promise.all([fetchRanking('school', { schoolId }), fetchRelayLineups(schoolId), fetchRelayHistory(schoolId)]) }
     catch { notify('目前使用本機最新成績與棒次安排接力。') }
     if (!viewActive || selectedSchoolId.value !== schoolId || racePhase.value !== 'setup') return
     dismissWindMeet()
