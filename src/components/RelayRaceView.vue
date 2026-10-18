@@ -17,6 +17,13 @@ const match = computed(() => relayMeet.match)
 const school = computed(() => getSchool(meet.value?.schoolId))
 const state = computed(() => relayRaceState(relayMeet.plans || [], Math.max(0, relayMeet.elapsed)))
 const teams = computed(() => state.value.teams)
+const waitingTeams = computed(() => {
+  const onTrack = new Set(state.value.runners.map(runner => runner.studentId))
+  const byClass = new Map(teams.value.map(team => [team.classId, team]))
+  return relayMeet.plans.map(plan => ({ classId: plan.classId, className: plan.className, color: plan.color,
+    athletes: plan.legs.filter(leg => leg.index > (byClass.get(plan.classId)?.legIndex ?? 0) && !onTrack.has(leg.studentId))
+      .map(leg => ({ student: leg.student, legIndex: leg.index })) }))
+})
 const classBests = computed(() => {
   game.revision
   const bests = new Map()
@@ -34,6 +41,7 @@ const teamDetails = computed(() => teams.value.map(team => {
   const nextRunner = !team.finished && plan?.legs?.[team.legIndex + 1]?.student
   const holder = state.value.runners.find(runner => runner.classId === team.classId && runner.baton && runner.role === 'active')
   return { ...team, currentRunner, nextRunner,
+    showPlace: team.distance >= 352,
     currentLane: holder ? Math.max(1, Math.min(8, Math.floor(holder.trackLane + .5))) : team.finished ? null : team.lane,
     classBest: classBests.value.get(team.classId) }
 }))
@@ -98,7 +106,7 @@ function legState(legIndex) {
           <button type="button" v-if="relayMeet.phase === 'saveerror'" class="btn small primary" @click="retryRelaySave">重試保存</button>
           <button type="button" v-for="rate in [1, 2, 4, 8, 16]" :key="rate" class="speed-button" :class="{ active: relayMeet.speed === rate }" :aria-pressed="relayMeet.speed === rate" @click="setRelaySpeed(rate)">{{ rate }}×</button>
         </div></div>
-        <RelayTrack :runners="state.runners" :animated="relayMeet.phase === 'running' && !relayMeet.paused" :paused="relayMeet.paused && relayMeet.phase === 'running'" :playback-rate="relayMeet.speed" />
+        <RelayTrack :runners="state.runners" :waiting-teams="waitingTeams" :animated="relayMeet.phase === 'running' && !relayMeet.paused" :paused="relayMeet.paused && relayMeet.phase === 'running'" :playback-rate="relayMeet.speed" />
         <div v-if="relayMeet.phase === 'countdown' && !relayMeet.paused" class="countdown-overlay"><span>ONE TEAM · ONE BATON</span><strong :key="countdown">{{ countdown }}</strong></div>
         <div v-if="relayMeet.paused && (relayMeet.phase === 'countdown' || relayMeet.phase === 'running')" class="pause-overlay">PAUSED<span>接力已暫停 · 按繼續開跑</span></div>
       </div>
@@ -106,7 +114,7 @@ function legState(legIndex) {
 
       <div class="relay-team-cards" aria-label="各班即時接力成績">
         <button type="button" v-for="team in teamDetails" :key="team.classId" class="relay-team-card" :class="{ selected: selectedTeam?.classId === team.classId, finished: team.finished }" :style="{ '--team-color': team.color }" :aria-pressed="selectedTeam?.classId === team.classId" @click="selectedClassId = team.classId">
-          <div class="relay-team-card-top"><span class="lane-label">{{ team.finished ? '已完賽' : '目前跑道' }} <b v-if="team.currentLane">{{ team.currentLane }}</b></span><span v-if="team.place" class="live-rank" :class="rankClass(team.place)">{{ team.finished ? '完賽' : '目前' }}第 {{ team.place }} 名</span></div>
+          <div class="relay-team-card-top"><span class="lane-label">{{ team.finished ? '已完賽' : '目前跑道' }} <b v-if="team.currentLane">{{ team.currentLane }}</b></span><span v-if="team.showPlace && team.place" class="live-rank" :class="rankClass(team.place)">{{ team.finished ? '完賽' : '目前' }}第 {{ team.place }} 名</span></div>
           <div class="relay-team-portrait"><PixelRunner :seed="String(team.studentId || team.classId)" :gender="runnerFor(team)?.gender" :height="runnerFor(team)?.height" :weight="runnerFor(team)?.weight" :color="team.color" :size="45" /><span>{{ team.finished ? 'FINISH' : '第 ' + (team.legIndex + 1) + ' 棒' }}</span></div>
           <strong>{{ className(team) }}<RelayTitleBadge :class-id="team.classId" compact /></strong>
           <div class="relay-runner-details">

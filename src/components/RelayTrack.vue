@@ -8,6 +8,7 @@ import PixelRunner from './PixelRunner.vue'
 
 const props = defineProps({
   runners: { type: Array, default: () => [] },
+  waitingTeams: { type: Array, default: () => [] },
   paused: { type: Boolean, default: false },
   animated: { type: Boolean, default: true },
   playbackRate: { type: Number, default: 1 },
@@ -26,6 +27,13 @@ const zoneMarkers = relayZoneMarkers()
 const startLines = relayStartLines()
 const breakLine = relayBreakLine()
 const runnerSize = 3.2
+const waitingGroups = computed(() => props.waitingTeams.map((team, index) => ({ ...team,
+  x: 5 + (index % 4) * 20, y: index < 4 ? -29 : 23,
+})))
+function waitingPosition(legIndex) {
+  const slot = legIndex - 1
+  return `translate(${slot % 5 * 3.5} ${Math.floor(slot / 5) * 4})`
+}
 const trees = [
   [-49, -23, 1.05], [-49, 13, .8], [-31, -47, 1], [8, -53, .9],
   [49, -53, .85], [94, -50, 1.1], [124, -32, .9], [135, -7, 1.05],
@@ -95,6 +103,14 @@ function strideStyle(runner) {
           <text y="14" class="relay-field-sub">ONE TEAM · ONE BATON</text>
           <path d="M-26 4h2V2h2v2h2v2h-2v2h-2V6h-2zM20 4h2V2h2v2h2v2h-2v2h-2V6h-2z" fill="#ffdc61" shape-rendering="crispEdges" />
         </g>
+        <g v-for="team in waitingGroups" :key="team.classId" :transform="`translate(${team.x} ${team.y})`" class="relay-waiting-group">
+          <text v-if="team.athletes.length" x="7" y="-3.5" :fill="team.color" stroke="#263c59" stroke-width=".06" paint-order="stroke">{{ team.className }}</text>
+          <g v-for="athlete in team.athletes" :key="athlete.student.id" :transform="waitingPosition(athlete.legIndex)">
+            <title>{{ team.className }} · 第 {{ athlete.legIndex + 1 }} 棒 · {{ athlete.student.name }} · 等待上場</title>
+            <ellipse cx="1.6" cy="3.05" rx="1.3" ry=".35" fill="#32534e" opacity=".2" />
+            <PixelRunner :seed="athlete.student.id" :gender="athlete.student.gender" :height="athlete.student.height" :weight="athlete.student.weight" :color="team.color" :size="runnerSize" :backdrop="false" :running="false" facing="right" />
+          </g>
+        </g>
         <path v-for="(radius, index) in boundaries" :key="index" :d="ovalPath(radius)" fill="none" stroke="#fff1d9" :stroke-width="index === 0 || index === 8 ? .22 : .12" opacity=".94" />
         <g v-for="marker in zoneMarkers" :key="marker.id">
           <path :d="marker.path" fill="none" :stroke="markerColor(marker.kind)" :stroke-width="marker.kind === 'prepare' ? .17 : .32" :stroke-dasharray="marker.kind === 'prepare' ? '.6 .45' : undefined" opacity=".94"><title>{{ marker.label || '30 公尺接力區標記' }}</title></path>
@@ -126,6 +142,7 @@ function strideStyle(runner) {
 .relay-track-surface.is-dragging { cursor: grabbing; }
 .relay-track-surface:focus-visible { outline: 3px solid #263c59; outline-offset: -4px; }
 .relay-track-svg { display: block; width: 100%; height: 100%; }
+.relay-waiting-group > text { font-size: 1.5px; font-weight: 800; text-anchor: middle; }
 .relay-sprite :deep(.pose-a), .relay-sprite :deep(.pose-b) { animation-duration: var(--relay-stride-duration) !important; }
 .relay-field-title text { fill: #fff2bf; font-family: var(--mono, monospace); font-size: 8px; font-weight: 900; text-anchor: middle; letter-spacing: .7px; }
 .relay-field-title .field-shadow { fill: #284e4b; }
