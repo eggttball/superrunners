@@ -106,7 +106,7 @@ function legState(legIndex) {
           <button type="button" v-if="relayMeet.phase === 'saveerror'" class="btn small primary" @click="retryRelaySave">重試保存</button>
           <button type="button" v-for="rate in [1, 2, 4, 8, 16]" :key="rate" class="speed-button" :class="{ active: relayMeet.speed === rate }" :aria-pressed="relayMeet.speed === rate" @click="setRelaySpeed(rate)">{{ rate }}×</button>
         </div></div>
-        <RelayTrack :runners="state.runners" :waiting-teams="waitingTeams" :animated="relayMeet.phase === 'running' && !relayMeet.paused" :paused="relayMeet.paused && relayMeet.phase === 'running'" :playback-rate="relayMeet.speed" />
+        <RelayTrack :runners="state.runners" :waiting-teams="waitingTeams" :animated="relayMeet.phase === 'running' && !relayMeet.paused" :paused="relayMeet.paused && relayMeet.phase === 'running'" :playback-rate="relayMeet.speed" :wheel-zoom="false" />
         <div v-if="relayMeet.phase === 'countdown' && !relayMeet.paused" class="countdown-overlay"><span>ONE TEAM · ONE BATON</span><strong :key="countdown">{{ countdown }}</strong></div>
         <div v-if="relayMeet.paused && (relayMeet.phase === 'countdown' || relayMeet.phase === 'running')" class="pause-overlay">PAUSED<span>接力已暫停 · 按繼續開跑</span></div>
       </div>

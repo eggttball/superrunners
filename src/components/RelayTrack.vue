@@ -12,9 +12,10 @@ const props = defineProps({
   paused: { type: Boolean, default: false },
   animated: { type: Boolean, default: true },
   playbackRate: { type: Number, default: 1 },
+  wheelZoom: { type: Boolean, default: true },
 })
 const surface = ref(null)
-const { viewBox, canZoomOut, interaction, reset, pointerDown, pointerMove, pointerEnd, keyDown } = useTrackCamera(surface)
+const { viewBox, canZoomOut, interaction, reset, pointerDown, pointerMove, pointerEnd, keyDown } = useTrackCamera(surface, { wheelZoom: props.wheelZoom })
 const prefix = `relay-track-${useId().replaceAll(':', '')}`
 const grassId = `${prefix}-grass`
 const trackId = `${prefix}-surface`
@@ -27,13 +28,28 @@ const zoneMarkers = relayZoneMarkers()
 const startLines = relayStartLines()
 const breakLine = relayBreakLine()
 const runnerSize = 3.2
-const waitingGroups = computed(() => props.waitingTeams.map((team, index) => ({ ...team,
-  x: 5 + (index % 4) * 20, y: index < 4 ? -29 : 23,
-})))
-function waitingPosition(legIndex) {
-  const slot = legIndex - 1
-  return `translate(${slot % 5 * 3.5} ${Math.floor(slot / 5) * 4})`
-}
+const waitingZones = [
+  { id: '100m', label: '100m 接棒', x: 50, y: 16 },
+  { id: '200m', label: '200m 接棒', x: 50, y: -31 },
+  { id: '300m', label: '300m 接棒', x: 3, y: -31 },
+  { id: '400m', label: '400m 接棒', x: 3, y: 16 },
+]
+const waitingGroups = computed(() => {
+  const stations = waitingZones.map(zone => ({ ...zone, athletes: [] }))
+  for (const team of props.waitingTeams) {
+    for (const athlete of team.athletes) {
+      // The second runner receives at 100m; later legs cycle through the
+      // four exchange locations around the oval.
+      const zoneIndex = (athlete.legIndex - 1 + waitingZones.length) % waitingZones.length
+      stations[zoneIndex].athletes.push({ ...athlete, classId: team.classId, className: team.className, color: team.color })
+    }
+  }
+  return stations.map(station => ({ ...station,
+    athletes: station.athletes.map((athlete, index) => ({ ...athlete,
+      position: `translate(${index % 8 * 3.7} ${2 + Math.floor(index / 8) * 3.9})`,
+    })),
+  }))
+})
 const trees = [
   [-49, -23, 1.05], [-49, 13, .8], [-31, -47, 1], [8, -53, .9],
   [49, -53, .85], [94, -50, 1.1], [124, -32, .9], [135, -7, 1.05],
@@ -67,7 +83,7 @@ function strideStyle(runner) {
 
 <template>
   <div class="relay-track-explorer">
-    <div ref="surface" class="relay-track-surface" :class="{ 'is-zoomed': canZoomOut, 'is-dragging': interaction.dragging }" tabindex="0" role="region" aria-label="完整四百公尺接力操場，可縮放與拖曳；加減鍵縮放，方向鍵移動，Home 回到全景"
+    <div ref="surface" class="relay-track-surface" :class="{ 'is-zoomed': canZoomOut, 'is-dragging': interaction.dragging }" tabindex="0" role="region" aria-label="完整四百公尺接力操場，可使用觸控手勢縮放與拖曳；方向鍵移動，Home 回到全景"
       @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerEnd" @pointercancel="pointerEnd" @lostpointercapture="pointerEnd" @keydown="keyDown">
       <svg class="relay-track-svg" :viewBox="viewBox || fullViewBox" preserveAspectRatio="xMidYMid meet" role="img" aria-label="八道四百公尺橢圓操場，十六棒逆時針接力，設階梯起跑線、三十公尺接力區及三百二十公尺搶道線" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -103,12 +119,12 @@ function strideStyle(runner) {
           <text y="14" class="relay-field-sub">ONE TEAM · ONE BATON</text>
           <path d="M-26 4h2V2h2v2h2v2h-2v2h-2V6h-2zM20 4h2V2h2v2h2v2h-2v2h-2V6h-2z" fill="#ffdc61" shape-rendering="crispEdges" />
         </g>
-        <g v-for="team in waitingGroups" :key="team.classId" :transform="`translate(${team.x} ${team.y})`" class="relay-waiting-group">
-          <text v-if="team.athletes.length" x="7" y="-3.5" :fill="team.color" stroke="#263c59" stroke-width=".06" paint-order="stroke">{{ team.className }}</text>
-          <g v-for="athlete in team.athletes" :key="athlete.student.id" :transform="waitingPosition(athlete.legIndex)">
-            <title>{{ team.className }} · 第 {{ athlete.legIndex + 1 }} 棒 · {{ athlete.student.name }} · 等待上場</title>
+        <g v-for="zone in waitingGroups" :key="zone.id" :transform="`translate(${zone.x} ${zone.y})`" class="relay-waiting-group">
+          <text v-if="zone.athletes.length" x="14" y="-1" class="relay-waiting-zone-label">{{ zone.label }}</text>
+          <g v-for="athlete in zone.athletes" :key="athlete.student.id" :transform="athlete.position">
+            <title>{{ athlete.className }} · 第 {{ athlete.legIndex + 1 }} 棒 · {{ athlete.student.name }} · 等待上場</title>
             <ellipse cx="1.6" cy="3.05" rx="1.3" ry=".35" fill="#32534e" opacity=".2" />
-            <PixelRunner :seed="athlete.student.id" :gender="athlete.student.gender" :height="athlete.student.height" :weight="athlete.student.weight" :color="team.color" :size="runnerSize" :backdrop="false" :running="false" facing="right" />
+            <PixelRunner :seed="athlete.student.id" :gender="athlete.student.gender" :height="athlete.student.height" :weight="athlete.student.weight" :color="athlete.color" :size="runnerSize" :backdrop="false" :running="false" facing="right" />
           </g>
         </g>
         <path v-for="(radius, index) in boundaries" :key="index" :d="ovalPath(radius)" fill="none" stroke="#fff1d9" :stroke-width="index === 0 || index === 8 ? .22 : .12" opacity=".94" />
@@ -142,7 +158,7 @@ function strideStyle(runner) {
 .relay-track-surface.is-dragging { cursor: grabbing; }
 .relay-track-surface:focus-visible { outline: 3px solid #263c59; outline-offset: -4px; }
 .relay-track-svg { display: block; width: 100%; height: 100%; }
-.relay-waiting-group > text { font-size: 1.5px; font-weight: 800; text-anchor: middle; }
+.relay-waiting-zone-label { fill: #fff9e8; stroke: #263c59; stroke-width: .32px; paint-order: stroke; font-size: 1.55px; font-weight: 900; text-anchor: middle; }
 .relay-sprite :deep(.pose-a), .relay-sprite :deep(.pose-b) { animation-duration: var(--relay-stride-duration) !important; }
 .relay-field-title text { fill: #fff2bf; font-family: var(--mono, monospace); font-size: 8px; font-weight: 900; text-anchor: middle; letter-spacing: .7px; }
 .relay-field-title .field-shadow { fill: #284e4b; }

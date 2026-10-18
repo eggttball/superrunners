@@ -12,7 +12,7 @@ const sceneCenter = {
   y: HOME_TRACK_VIEW.y + HOME_TRACK_VIEW.height / 2,
 }
 
-export function useTrackCamera(surface) {
+export function useTrackCamera(surface, { wheelZoom = true } = {}) {
   const camera = reactive({ x: sceneCenter.x, y: sceneCenter.y, zoom: MIN_ZOOM })
   const size = reactive({ width: 0, height: 0 })
   const interaction = reactive({ dragging: false })
@@ -230,14 +230,15 @@ export function useTrackCamera(surface) {
     resize()
     observer = new ResizeObserver(resize)
     observer.observe(element)
-    // Explicitly non-passive: zoom the track instead of scrolling/zooming the page.
-    element.addEventListener('wheel', wheel, { passive: false })
+    // Some views let the browser handle the wheel so the page can scroll while
+    // the pointer is over the track. Other views keep wheel-based camera control.
+    if (wheelZoom) element.addEventListener('wheel', wheel, { passive: false })
     window.addEventListener('blur', clearGesture)
   })
   onBeforeUnmount(() => {
     clearGesture()
     observer?.disconnect()
-    element?.removeEventListener('wheel', wheel)
+    if (wheelZoom) element?.removeEventListener('wheel', wheel)
     window.removeEventListener('blur', clearGesture)
   })
 
