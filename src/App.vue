@@ -13,11 +13,15 @@ import StudentDialog from './components/StudentDialog.vue'
 import Icon from './components/Icon.vue'
 import AuthPanel from './components/AuthPanel.vue'
 import { windMeet, pauseWindMeet } from './lib/wind-meet.js'
+import { relayMeet, pauseRelayMeet } from './lib/relay-meet.js'
 import './regions.css'
 
 const progressLabel = computed(() => syncState.busy && !syncState.ready ? syncState.phase : ({ population: '正在建立全國班級與學生', ranking: '正在計算全國能力排名', complete: '全國資料生成完成' }[game.phase] || game.phase))
 const displayedProgress = computed(() => syncState.busy && !syncState.ready ? syncState.progress : game.progress)
 const documentTitle = computed(() => {
+  if (authState.user && relayMeet.active && relayMeet.match) {
+    return `SUPER RUNNERS | ${relayMeet.meet.schoolName} 大隊接力 第 ${relayMeet.match.round} 輪 · 第 ${relayMeet.match.number} 場`
+  }
   if (authState.user && windMeet.active && windMeet.match) {
     if (windMeet.scope === 'championship') return `SUPER RUNNERS | ${windMeet.meet.eventName} ${windMeet.match.final ? '全國總冠軍賽' : `第 ${windMeet.match.round} 輪 · 第 ${windMeet.match.number} 場`}`
     if (windMeet.scope === 'regional') return `SUPER RUNNERS | ${windMeet.meet.friendly ? windMeet.meet.city + '校際友誼賽' : windMeet.meet.eventName} ${windMeet.match.final ? '冠軍決賽' : `第 ${windMeet.match.round} 輪 · 第 ${windMeet.match.number} 場`}`
@@ -41,7 +45,7 @@ watch(documentTitle, title => { document.title = title }, { immediate: true })
 watch(() => syncState.ready && game.ready, ready => { if (ready) void Promise.allSettled([fetchRegionChampions(), fetchNationalChampion()]) })
 function preventUnsavedExit(event) { if (game.saving || game.exportBusy) { event.preventDefault(); event.returnValue = '' } }
 function reload() { window.location.reload() }
-async function logout() { pauseAutomaticMeet(); pauseWindMeet(); stopCloudSync(); await signOut() }
+async function logout() { pauseAutomaticMeet(); pauseWindMeet(); pauseRelayMeet(); stopCloudSync(); await signOut() }
 function resumeSync() { if (authState.user && game.world) void retryCloudSync() }
 function openSchools() { game.nationalRanking = false; go('schools') }
 function openNationalRanking() { game.nationalRanking = true; go('schools') }

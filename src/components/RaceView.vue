@@ -8,13 +8,18 @@ import Track from './Track.vue'
 import PixelRunner from './PixelRunner.vue'
 import Icon from './Icon.vue'
 import GamePageHeader from './GamePageHeader.vue'
-import { fetchHistory, fetchRanking, fetchWindHistory, syncState } from '../lib/cloud.js'
+import { fetchHistory, fetchRanking, fetchWindHistory, fetchRelayHistory, fetchRelayLineups, fetchRelayChampions, syncState } from '../lib/cloud.js'
 import { classFinalists } from '../lib/wind-selection.js'
 import { windMeet, startWindMeet, startNationalWindMeet, terminateNationalWindMeet, toggleWindMeetPause, setWindMeetSpeed, retryWindMeetSave, dismissWindMeet } from '../lib/wind-meet.js'
 import { compareSchoolOrder } from '../lib/school-order.js'
 import WindTitleBadge from './WindTitleBadge.vue'
 import WindMeetSummary from './WindMeetSummary.vue'
 import NationalWindSummary from './NationalWindSummary.vue'
+import { createSchoolRelayMeet } from '../lib/game.js'
+import RelayRaceView from './RelayRaceView.vue'
+import RelayMeetSummary from './RelayMeetSummary.vue'
+import RelayTitleBadge from './RelayTitleBadge.vue'
+import { relayMeet, startRelayMeet, dismissRelayMeet } from '../lib/relay-meet.js'
 
 const props = defineProps({ regionalOnly: Boolean, championshipOnly: Boolean })
 
@@ -41,6 +46,11 @@ const viewedWindMeet = ref(null)
 const showWindHistory = ref(false)
 const windHistoryLoading = ref(false)
 const windHistoryError = ref('')
+const startingRelayMeet = ref(false)
+const viewedRelayMeet = ref(null)
+const showRelayHistory = ref(false)
+const relayHistoryLoading = ref(false)
+const relayHistoryError = ref('')
 let frame, previousTimestamp = 0, countdownCue = 0, viewActive = true
 
 const selectedTeam = computed(() => { game.revision; return getTeam(game.raceTeamId) })
@@ -73,6 +83,11 @@ const racePaused = computed(() => windSelection.value ? windMeet.paused : automa
 const raceSpeed = computed(() => windSelection.value ? windMeet.speed : automatic.value ? autoMeet.speed : speed.value)
 const displayedSessionId = computed(() => windSelection.value ? windMeet.meet?.id : automatic.value ? autoMeet.sessionId : sessionId.value)
 const school = computed(() => getSchool(displayedSchoolId.value))
+const relayHistory = computed(() => {
+  game.revision
+  return (game.world.relayMeets || []).filter(meet => meet.schoolId === selectedSchoolId.value)
+    .slice().sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+})
 const classes = computed(() => school.value?.classes.filter(cls => cls.grade === Number(grade.value)) || [])
 const schoolTeamClassIds = computed(() => {
   game.revision
@@ -184,6 +199,45 @@ function selectClass(id) {
   if (selectedClasses.value.includes(id)) selectedClasses.value = selectedClasses.value.filter(value => value !== id)
   else selectedClasses.value = [...selectedClasses.value, id]
 }
+
+async function enterRelayRace() {
+  if (startingRelayMeet.value || startingWindMeet.value || !school.value || selectedClasses.value.length === 1 || selectedClasses.value.length > 8) return
+  const schoolId = selectedSchoolId.value
+  const ids = [...selectedClasses.value]
+  startingRelayMeet.value = true
+  try {
+    try { await Promise.all([fetchRanking('school', { schoolId }), fetchRelayLineups(schoolId)]) }
+    catch { notify('目前使用本機最新成績與棒次安排接力。') }
+    if (!viewActive || selectedSchoolId.value !== schoolId || racePhase.value !== 'setup') return
+    dismissWindMeet()
+    dismissAutomaticMeetResult()
+    await startRelayMeet(await createSchoolRelayMeet(schoolId, ids))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  } catch (error) { notify(error.message) }
+  finally { startingRelayMeet.value = false }
+}
+
+function leaveRelay() {
+  viewedRelayMeet.value = null
+  dismissRelayMeet()
+  phase.value = 'setup'
+  game.raceTitle = ''
+}
+
+let relayHistoryRequest = 0
+watch([showRelayHistory, selectedSchoolId, () => syncState.ready], async ([show, id]) => {
+  const request = ++relayHistoryRequest
+  relayHistoryError.value = ''
+  relayHistoryLoading.value = false
+  if (!show || !id) return
+  relayHistoryLoading.value = true
+  try { await fetchRelayHistory(id) }
+  catch (error) { if (request === relayHistoryRequest) relayHistoryError.value = error.message }
+  finally { if (request === relayHistoryRequest) relayHistoryLoading.value = false }
+})
+watch([selectedSchoolId, () => syncState.ready], ([id, ready]) => {
+  if (id && ready) void fetchRelayChampions(id).catch(() => {})
+}, { immediate: true })
 
 function prepareHeat() {
   const heat = queue.value[heatIndex.value]
@@ -404,12 +458,14 @@ function returnToSetup() {
   if (returnToNational) go('national')
 }
 function leaveTeamRaceSetup() { game.raceTeamId = ''; go('teams') }
-onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(frame); game.raceTitle = ''; if (!automatic.value && !windSelection.value) setMusicMode('ambient') })
+onUnmounted(() => { viewActive = false; historyRequest++; relayHistoryRequest++; cancelAnimationFrame(frame); game.raceTitle = ''; if (!automatic.value && !windSelection.value && !relayMeet.active) setMusicMode('ambient') })
 </script>
 
 <template>
   <section class="content-view race-view">
-    <NationalWindSummary v-if="nationalWindSelection && racePhase === 'complete'" :run-id="windMeet.runId" :school-ids="windMeet.schoolIds" @back="returnToSetup" />
+    <RelayMeetSummary v-if="!props.regionalOnly && !props.championshipOnly && viewedRelayMeet" :meet="viewedRelayMeet" @close="leaveRelay" />
+    <RelayRaceView v-else-if="!props.regionalOnly && !props.championshipOnly && (relayMeet.active || (relayMeet.phase === 'complete' && !windMeet.active && !autoMeet.active))" @close="leaveRelay" />
+    <NationalWindSummary v-else-if="nationalWindSelection && racePhase === 'complete'" :run-id="windMeet.runId" :school-ids="windMeet.schoolIds" @back="returnToSetup" />
     <WindMeetSummary v-else-if="viewedWindMeet || (windSelection && racePhase === 'complete')" :meet="viewedWindMeet || windMeet.meet" :friendship-results="viewedWindMeet ? [] : windMeet.friendshipResults" :back-label="championshipSelection ? '回全國大賽' : regionalSelection ? '回區域比賽' : '回比賽選單'" @back="returnToSetup" />
     <template v-else-if="racePhase === 'setup'">
       <template v-if="teamRace">
@@ -432,14 +488,15 @@ onUnmounted(() => { viewActive = false; historyRequest++; cancelAnimationFrame(f
           <template v-if="school">
             <div class="split-heading"><div><span class="eyebrow">01 / 選擇參賽班級</span><h2>{{ school.name }}</h2><p class="muted">{{ school.city }} · 可跨年級選擇 · 未選班級可直接進行選拔賽</p></div><span class="selection-counter"><b>{{ selectedClasses.length }}</b> 班</span></div>
             <div class="tabs"><button v-for="year in 3" :key="year" :class="{ active: grade === year }" @click="grade = year">{{ gradeLabels[year - 1] }} <span>{{ school.classes.filter(c => c.grade === year).length }} 班</span></button></div>
-            <div class="class-grid"><button v-for="cls in classes" :key="cls.id" class="class-card" :class="{ selected: selectedClasses.includes(cls.id), 'has-school-team': schoolTeamClassIds.has(cls.id) }" :title="schoolTeamClassIds.has(cls.id) ? '田徑隊班' : undefined" :aria-label="`${cls.name}，${cls.studentIds.length} 位學生${schoolTeamClassIds.has(cls.id) ? '，田徑隊班' : ''}`" @click="selectClass(cls.id)"><span class="class-kit" :style="{ background: cls.color }"></span><span class="checkbox-visual"><Icon v-if="selectedClasses.includes(cls.id)" name="check" :size="14" /></span><strong class="class-card-name">{{ cls.name }}<span v-if="schoolTeamClassIds.has(cls.id)" class="runner-identity-icon school-team-status school-team-class-icon" title="田徑隊班" aria-label="田徑隊班"><Icon name="sprint" :size="14" /></span></strong><small>{{ cls.studentIds.length }} 位學生</small></button></div>
+            <div class="class-grid"><button v-for="cls in classes" :key="cls.id" class="class-card" :class="{ selected: selectedClasses.includes(cls.id), 'has-school-team': schoolTeamClassIds.has(cls.id) }" :title="schoolTeamClassIds.has(cls.id) ? '田徑隊班' : undefined" :aria-label="`${cls.name}，${cls.studentIds.length} 位學生${schoolTeamClassIds.has(cls.id) ? '，田徑隊班' : ''}`" @click="selectClass(cls.id)"><span class="class-kit" :style="{ background: cls.color }"></span><span class="checkbox-visual"><Icon v-if="selectedClasses.includes(cls.id)" name="check" :size="14" /></span><strong class="class-card-name">{{ cls.name }}<RelayTitleBadge :class-id="cls.id" compact /><span v-if="schoolTeamClassIds.has(cls.id)" class="runner-identity-icon school-team-status school-team-class-icon" title="田徑隊班" aria-label="田徑隊班"><Icon name="sprint" :size="14" /></span></strong><small>{{ cls.studentIds.length }} 位學生</small></button></div>
             <div class="selected-classes"><span class="muted">已選班級</span><span v-if="!selectedClasses.length" class="muted">尚未選擇</span><button v-for="id in selectedClasses" :key="id" class="chip" :title="schoolTeamClassIds.has(id) ? '田徑隊班' : undefined" :aria-label="`${getClass(id).name}${schoolTeamClassIds.has(id) ? '，田徑隊班' : ''}`" @click="selectClass(id)">{{ getClass(id).name }}<span v-if="schoolTeamClassIds.has(id)" class="runner-identity-icon school-team-status school-team-class-icon" title="田徑隊班" aria-label="田徑隊班"><Icon name="sprint" :size="13" /></span><Icon name="close" :size="13" /></button></div>
-            <div class="event-selection"><span class="eyebrow">02 / 選擇比賽項目</span><div class="event-buttons"><button class="event-card sprint" :disabled="!selectedClasses.length || selectedClasses.length > 8" @click="enterRace"><Icon name="bolt" :size="28" /><div><strong>一百公尺</strong><small>全班出賽 · 最多 8 班</small></div><Icon name="arrow" :size="24" /></button><button class="event-card wind-event" :disabled="startingWindMeet" @click="enterWindRace"><Icon name="sprint" :size="28" /><div><strong>風速小子選拔賽</strong><small>{{ startingWindMeet ? '準備參賽名單…' : selectedClasses.length ? '已選 ' + selectedClasses.length + ' 班 · 前三名練習' : '全校各年級 · 前三名晉級' }}</small></div><Icon name="play" :size="22" /></button><button class="event-card automatic" @click="enterAutomaticMeet"><Icon name="flag" :size="28" /><div><strong>全校自動百米賽</strong><small>一年級至三年級</small></div><Icon name="play" :size="22" /></button><button class="event-card relay" disabled><Icon name="team" :size="28" /><div><strong>大隊接力</strong><small>下一階段開放</small></div><span class="badge">SOON</span></button></div></div>
+            <div class="event-selection"><span class="eyebrow">02 / 選擇比賽項目</span><div class="event-buttons"><button class="event-card sprint" :disabled="!selectedClasses.length || selectedClasses.length > 8" @click="enterRace"><Icon name="bolt" :size="28" /><div><strong>一百公尺</strong><small>全班出賽 · 最多 8 班</small></div><Icon name="arrow" :size="24" /></button><button class="event-card wind-event" :disabled="startingWindMeet" @click="enterWindRace"><Icon name="sprint" :size="28" /><div><strong>風速小子選拔賽</strong><small>{{ startingWindMeet ? '準備參賽名單…' : selectedClasses.length ? '已選 ' + selectedClasses.length + ' 班 · 前三名練習' : '全校各年級 · 前三名晉級' }}</small></div><Icon name="play" :size="22" /></button><button class="event-card automatic" @click="enterAutomaticMeet"><Icon name="flag" :size="28" /><div><strong>全校自動百米賽</strong><small>一年級至三年級</small></div><Icon name="play" :size="22" /></button><button class="event-card relay" :disabled="startingRelayMeet || startingWindMeet || selectedClasses.length === 1 || selectedClasses.length > 8" @click="enterRelayRace"><Icon name="team" :size="28" /><div><strong>大隊接力</strong><small>{{ startingRelayMeet ? '準備接力名單…' : selectedClasses.length ? '2～8 班友誼賽 · 16×100m' : '全校淘汰賽 · 風速小班' }}</small></div><Icon name="play" :size="22" /></button></div></div>
             <p class="wind-event-note">風速小子：不選班級時，各年級由兩班前三名對跑，每場前三名晉級，最後三人爭奪年級冠軍；三位年級冠軍再跑一場不列紀錄的友誼賽。選班則為前三名練習，超過 8 人會分組比賽。</p><div class="race-hint"><Icon name="clock" :size="19" /><p>全校自動賽會依一年級、二年級、三年級的班級順序持續進行。<br /><span>可切換到其他頁面；賽程仍會繼續，每組完賽自動存檔。</span></p></div>
           </template>
           <div v-else class="empty-state school-await"><Icon name="school" :size="46" /><h2>選一所主場，或從全國出發</h2><p>從左側選擇學校，安排班級或全校比賽。</p><p>也可以直接按上方「全國校內自動百米賽」，<br />從臺北市、新北市起，逐縣市、逐校完成一年級至三年級。<br />預設 1 倍速度，可隨時暫停與繼續。</p></div>
         </div>
       </div>
+      <div v-if="school" class="panel wind-history-panel"><button class="section-title full-width plain-button" @click="showRelayHistory = !showRelayHistory"><h3><Icon name="team" :size="19" />大隊接力歷程 <span class="muted">{{ relayHistory.length }} 屆</span></h3><span class="muted">{{ showRelayHistory ? '收合 −' : '展開 +' }}</span></button><template v-if="showRelayHistory"><p v-if="relayHistoryLoading" class="muted" role="status">取得接力歷程…</p><p v-else-if="relayHistoryError" class="data-note" role="alert">{{ relayHistoryError }}</p><p v-if="!relayHistory.length && !relayHistoryLoading" class="muted">目前沒有正式接力紀錄。</p><button v-for="meet in relayHistory" :key="meet.id" class="wind-history-entry" @click="viewedRelayMeet = meet"><span>{{ dateText(meet.startedAt) }}<small>{{ meet.status === 'complete' ? '接力完成' : '尚未完成' }} · {{ meet.completedMatches }} 場</small></span><span>查看對戰歷程<Icon name="arrow" :size="16" /></span></button></template></div>
       <div v-if="school" class="panel wind-history-panel"><button class="section-title full-width plain-button" @click="showWindHistory = !showWindHistory"><h3><Icon name="sprint" :size="19" />風速小子歷屆選拔 <span class="muted">{{ windHistory.length }} 屆</span></h3><span class="muted">{{ showWindHistory ? '收合 −' : '展開 +' }}</span></button><template v-if="showWindHistory"><p v-if="windHistoryLoading" class="muted" role="status">取得歷屆選拔…</p><p v-else-if="windHistoryError" class="data-note" role="alert">{{ windHistoryError }}</p><p v-if="!windHistory.length && !windHistoryLoading" class="muted">目前沒有選拔紀錄。</p><button v-for="meet in windHistory" :key="meet.id" class="wind-history-entry" @click="viewedWindMeet = meet"><span>{{ dateText(meet.startedAt) }}<small>{{ meet.status === 'complete' ? '選拔完成' : '尚未完成' }} · {{ meet.completedMatches }} / {{ meet.totalMatches }} 場</small></span><span>查看對戰歷程<Icon name="arrow" :size="16" /></span></button></template></div><div v-if="school" class="panel history-panel"><button class="section-title full-width plain-button" @click="showHistory = !showHistory"><h3><Icon name="clock" :size="19" /> 校內比賽紀錄 <span class="muted">{{ records.length }} 組</span></h3><span class="muted">{{ showHistory ? '收合 −' : '展開 +' }}</span></button><template v-if="showHistory"><p v-if="!records.length" class="empty-state">還沒有比賽紀錄。第一聲起跑槍，從今天開始。</p><details v-for="race in records" :key="race.id" class="race-history"><summary><span>{{ race.className || getClass(race.classId).name }} · 第 {{ race.heat }} 組</span><span>{{ dateText(race.finishedAt) }} · {{ race.results.length }} 人 <em v-if="race.syncStatus === 'pending'" class="badge local-pending">本機待同步</em></span></summary><div class="table-wrap"><table class="data-table"><thead><tr><th>名次</th><th>學生</th><th>學號</th><th>秒數</th></tr></thead><tbody><tr v-for="result in race.results" :key="result.studentId"><td>{{ result.place }}</td><td><button class="text-button" @click="game.studentId = result.studentId">{{ result.name }}<WindTitleBadge :student-id="result.studentId" compact /><span v-if="result.personalBest" class="personal-best-result"><Icon name="trophy" :size="13" />{{ result.previousBest100 == null ? '首筆 PB' : '新 PB!' }}</span></button></td><td class="mono">{{ result.studentNumber }}</td><td class="mono">{{ timeText(result.time) }}</td></tr></tbody></table></div></details></template></div>
       </template>
     </template>

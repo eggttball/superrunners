@@ -2,7 +2,7 @@ import { shallowReactive } from 'vue'
 import { auth, ADMIN_EMAIL } from './auth.js'
 import { databaseURL } from './firebase.js'
 import { pendingOperations } from './storage.js'
-import { CLOUD_SCHEMA, cloudRacePath, emptyDynamicStudent, flagIds, idFlags, putScores, schoolUpload, sortedScores, staticMetadata, values, worldIdentity } from './cloud-schema.js'
+import { CLOUD_SCHEMA, cloudRacePath, emptyDynamicStudent, flagIds, idFlags, normalizeRelayData, normalizeRelayMeet, normalizeRelayRace, putScores, schoolUpload, sortedScores, staticMetadata, values, worldIdentity } from './cloud-schema.js'
 import { normalizeRegion } from './regional-selection.js'
 
 export const syncState = shallowReactive({ ready: false, busy: false, pending: 0, error: '', phase: '', progress: 0 })
@@ -141,7 +141,7 @@ export async function restoreCloud(onProgress) {
   const meta = await request(`${rootPath()}/static/meta`)
   const schoolKeys = await request(`${rootPath()}/uploaded`)
   const world = { ...meta, cloudBinding: { ...context }, schools: [], students: [], teams: [], races: [], awards: [], windMeets: [], windChampions: {}, regionMeets: [], regionChampions: {},
-    nationalMeets: [], nationalChampion: null, nationalHonors: {},
+    nationalMeets: [], nationalChampion: null, nationalHonors: {}, relayMeets: [], relayRaces: [], relayLineups: [], relayChampions: {},
     favoriteSchoolIds: [], followedTeamIds: [], settings: { muted: false } }
   const ids = Object.keys(schoolKeys || {}).filter(id => id !== '_meta')
   if (ids.length !== manifest.schoolCount) throw new Error('雲端固定資料不完整，已停止還原。')
@@ -184,6 +184,14 @@ export async function restoreCloud(onProgress) {
     if (champions) world.windChampions[ids[index]] = champions
     onProgress({ phase: `從雲端還原成績（${index + 1}/${ids.length}）`, progress: 0.75 + (index + 1) / ids.length * 0.2 })
   }
+  const [relayMeets, relayRaces, relayLineups, relayChampions] = await Promise.all([
+    request(`${rootPath()}/dynamic/relayMeets`), request(`${rootPath()}/dynamic/relayRaces`),
+    request(`${rootPath()}/dynamic/relayLineups`), request(`${rootPath()}/dynamic/relayChampions`),
+  ])
+  world.relayMeets = values(relayMeets).flatMap(meets => values(meets).map(normalizeRelayMeet))
+  world.relayRaces = values(relayRaces).flatMap(races => values(races).map(normalizeRelayRace))
+  world.relayLineups = values(relayLineups).map(normalizeRelayData)
+  world.relayChampions = Object.fromEntries(Object.entries(relayChampions || {}).map(([id, champion]) => [id, normalizeRelayData(champion)]))
   const [regionMeets, regionChampions, regionRaces] = await Promise.all([
     request(`${rootPath()}/dynamic/regionMeets`), request(`${rootPath()}/dynamic/regionChampions`), request(`${rootPath()}/dynamic/regionRaces`),
   ])
@@ -214,6 +222,59 @@ export function cloudOperation(type, payload) {
     createdAt: Date.now() + operationSequence++ / 100000, worldId: context?.worldId || null }
 }
 
+function relayTimestamp(item, field) {
+  return item?.[`${field}Ms`] ?? (Date.parse(item?.[field] || '') || 0)
+}
+
+async function sendRelayPatch(basePatch, champion = null) {
+  const lineupEntries = Object.entries(basePatch).filter(([path]) => path.startsWith('dynamic/relayLineups/'))
+  const meetEntries = Object.entries(basePatch).filter(([path]) => path.startsWith('dynamic/relayMeets/'))
+  const raceEntries = Object.entries(basePatch).filter(([path]) => path.startsWith('dynamic/relayRaces/'))
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const [savedChampion, savedLineups, savedMeets, savedRaces] = await Promise.all([
+      champion ? request(`${rootPath()}/dynamic/relayChampions/${champion.schoolId}`) : Promise.resolve(null),
+      Promise.all(lineupEntries.map(([path]) => request(`${rootPath()}/${path}`))),
+      Promise.all(meetEntries.map(([path]) => request(`${rootPath()}/${path}`))),
+      Promise.all(raceEntries.map(([path]) => request(`${rootPath()}/${path}`))),
+    ])
+    const patch = { ...basePatch }
+    const latestRaces = []
+    raceEntries.forEach(([path, race], index) => {
+      const saved = savedRaces[index]
+      if (saved) delete patch[path]
+      latestRaces.push(normalizeRelayRace(saved || race))
+    })
+    const latestMeets = []
+    meetEntries.forEach(([path, meet], index) => {
+      const saved = savedMeets[index]
+      const latest = saved && (saved.completedMatches >= meet.completedMatches ||
+        (saved.status === 'complete' && meet.status !== 'complete')) ? saved : meet
+      if (latest !== meet) delete patch[path]
+      latestMeets.push(normalizeRelayMeet(latest))
+    })
+    const latestLineups = []
+    lineupEntries.forEach(([path, lineup], index) => {
+      const saved = savedLineups[index]
+      const latest = saved && relayTimestamp(saved, 'updatedAt') > relayTimestamp(lineup, 'updatedAt') ? saved : lineup
+      if (latest !== lineup) delete patch[path]
+      if (latest) latestLineups.push(normalizeRelayData(latest))
+    })
+    const latestChampion = champion && (!savedChampion || relayTimestamp(champion, 'awardedAt') >= relayTimestamp(savedChampion, 'awardedAt')) ? champion : savedChampion
+    if (champion && latestChampion === champion) patch[`dynamic/relayChampions/${champion.schoolId}`] = champion
+    try {
+      if (Object.keys(patch).length) await request(rootPath(), { method: 'PATCH', data: patch })
+      return { ...(latestLineups.length ? { relayLineups: latestLineups } : {}),
+        ...(latestMeets.length ? { relayMeets: latestMeets } : {}),
+        ...(latestRaces.length ? { relayRaces: latestRaces } : {}),
+        ...(champion ? { relayChampions: { [champion.schoolId]: normalizeRelayData(latestChampion) } } : {}) }
+    } catch (error) {
+      // A later lineup/title may have arrived between the read and write.
+      // Retry against its timestamp while retaining this meet's history.
+      if (attempt === 3 || ![401, 403].includes(error.status)) throw error
+    }
+  }
+}
+
 async function sendOperation(operation) {
   if (operation.uid !== context.uid || (operation.worldId && operation.worldId !== context.worldId)) throw new Error('待同步資料屬於另一個帳號或世界，已停止傳送。')
   const { type, payload } = operation
@@ -235,8 +296,22 @@ async function sendOperation(operation) {
     return {}
   }
   if (type === 'patch') {
+    if (Object.keys(payload).some(path => path.startsWith('dynamic/relayLineups/'))) return sendRelayPatch(payload)
     await request(rootPath(), { method: 'PATCH', data: payload })
     return {}
+  }
+  if (type === 'relay') {
+    const { meet, race, champion, lineups = [] } = payload
+    if (meet?.friendly || race?.friendly) throw new Error('友誼接力賽不會上傳正式成績。')
+    const patch = {}
+    if (meet) patch[`dynamic/relayMeets/${meet.schoolId}/${meet.id}`] = meet
+    if (race) {
+      const { syncStatus, ...savedRace } = race
+      patch[`dynamic/relayRaces/${race.schoolId}/${race.id}`] = savedRace
+    }
+    for (const lineup of lineups) patch[`dynamic/relayLineups/${lineup.classId}`] = lineup
+    // Relay splits are never sent to dynamic/bests or rankings.
+    return sendRelayPatch(patch, champion)
   }
   if (type !== 'heat') throw new Error('無法辨識待同步資料類型。')
   const { race, students, awards, teamId, teamAwardIds, windMeet, windChampion, regionMeet, regionChampion, nationalMeet, nationalChampion } = payload
@@ -379,7 +454,8 @@ export async function retryCloudSync() {
         // A GET started while this write was in flight may have seen the old
         // server value. Invalidate it before removing its local overlay.
         localGeneration++
-        await mergeLocal({ ...update, acknowledge: operation.id, ...(operation.type === 'heat' ? { syncedRaceId: operation.payload.race.id } : {}) })
+        await mergeLocal({ ...update, acknowledge: operation.id, ...(operation.type === 'heat' ? { syncedRaceId: operation.payload.race.id } : {}),
+          ...(operation.type === 'relay' && operation.payload.race ? { syncedRelayRaceId: operation.payload.race.id } : {}) })
         operations = await pendingOperations()
         syncState.pending = operations.length
       }
@@ -556,5 +632,32 @@ export function fetchWindHistory(schoolId) {
     const [meets, champions] = await Promise.all([request(`${rootPath()}/dynamic/windMeets/${schoolId}`),
       request(`${rootPath()}/dynamic/windChampions/${schoolId}`)])
     return { windMeets: values(meets).map(normalizeWindMeet), schoolChampions: { schoolId, champions: champions || {} } }
+  })
+}
+
+export function fetchRelayHistory(schoolId) {
+  return scopedRead(`relay-history:${schoolId}`, async () => {
+    const [meets, races, champion] = await Promise.all([
+      request(`${rootPath()}/dynamic/relayMeets/${schoolId}`), request(`${rootPath()}/dynamic/relayRaces/${schoolId}`),
+      request(`${rootPath()}/dynamic/relayChampions/${schoolId}`),
+    ])
+    return { relayMeets: values(meets).map(normalizeRelayMeet), relayRaces: values(races).map(normalizeRelayRace),
+      relayChampions: { [schoolId]: champion ? normalizeRelayData(champion) : null } }
+  })
+}
+
+export function fetchRelayChampions(schoolId) {
+  return scopedRead(`relay-champion:${schoolId}`, async () => {
+    const champion = await request(`${rootPath()}/dynamic/relayChampions/${schoolId}`)
+    return { relayChampions: { [schoolId]: champion ? normalizeRelayData(champion) : null } }
+  })
+}
+
+export function fetchRelayLineups(schoolId) {
+  return scopedRead(`relay-lineups:${schoolId}`, async () => {
+    const school = currentWorld().schools.find(item => item.id === schoolId)
+    if (!school) throw new Error('找不到這所學校。')
+    const lineups = await Promise.all(school.classes.map(cls => request(`${rootPath()}/dynamic/relayLineups/${cls.id}`)))
+    return { relayLineups: lineups.filter(Boolean).map(normalizeRelayData) }
   })
 }

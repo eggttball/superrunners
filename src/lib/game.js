@@ -12,6 +12,8 @@ import { createRegionalMeet, completeRegionalMatch, normalizeRegion } from './re
 import { createNationalChampionship, completeNationalMatch } from './national-championship.js'
 import { installWindMeet, restoreWindMeet, restoreNationalWindMeet, windMeet } from './wind-meet.js'
 import { admissionDetails, buildAdmittedStudent, validateStudentInput } from './student-admission.js'
+import { prepareRelayLineup, createRelayMeet, completeRelayMatch } from './relay-rules.js'
+import { relayMeet, installRelayMeet, restoreRelayMeet } from './relay-meet.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -92,8 +94,19 @@ function boot() {
         classes = new Map()
         for (const school of world.schools) for (const cls of school.classes) classes.set(cls.id, cls)
         game.world = world
+        world.relayMeets ||= []
+        world.relayRaces ||= []
+        world.relayLineups ||= []
+        world.relayChampions ||= {}
+        installRelayMeet({ getStudent, canStart: () => !autoMeet.active && !windMeet.active,
+          getMeet: id => game.world.relayMeets.find(meet => meet.id === id), saveMatch: recordRelayMatch,
+          saveProgress: async progress => {
+            await saveLocalMetaPatch({ relayMeetProgress: progress })
+            game.world.relayMeetProgress = progress
+          },
+        })
         installWindMeet({ getStudent, getSchool, getClass, saveMatch: (meet, ...args) => meet.kind === 'national-championship' ? recordNationalMatch(meet, ...args) : meet.kind === 'regional' ? recordRegionalMatch(meet, ...args) : recordWindMatch(meet, ...args), savePause: saveWindPause,
-          canStart: () => !autoMeet.active, createMeet: createSchoolWindMeet,
+          canStart: () => !autoMeet.active && !relayMeet.active, createMeet: createSchoolWindMeet,
           getMeet: id => game.world.windMeets.find(meet => meet.id === id),
           getRunMeets: runId => game.world.windMeets.filter(meet => meet.nationalRunId === runId),
           saveProgress: async progress => {
@@ -110,14 +123,18 @@ function boot() {
         game.ready = true
         game.phase = '全國資料已就緒'
         game.revision++
-        const restoredWind = await restoreNationalWindMeet(world.nationalWindMeetProgress)
-        if (!restoredWind) restoreWindMeet([...world.nationalMeets, ...world.regionMeets, ...world.windMeets.filter(meet => !meet.nationalRunId)].filter(meet => meet.status === 'running')
+        const latestRelay = world.relayMeets.slice().sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]
+        const relayProgress = world.relayMeetProgress || (latestRelay?.status === 'running'
+          ? { active: true, meet: latestRelay, elapsed: -3, paused: false, speed: 1, plans: [] } : null)
+        const restoredRelay = await restoreRelayMeet(relayProgress)
+        const restoredWind = !restoredRelay && await restoreNationalWindMeet(world.nationalWindMeetProgress)
+        if (!restoredRelay && !restoredWind) restoreWindMeet([...world.nationalMeets, ...world.regionMeets, ...world.windMeets.filter(meet => !meet.nationalRunId)].filter(meet => meet.status === 'running')
           .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0])
         const cancelledRuns = new Set(world.cancelledAutomaticMeetRunIds || [])
         const savedProgress = world.autoMeetProgress?.active && !cancelledRuns.has(world.autoMeetProgress.runId)
           ? world.autoMeetProgress : null
         const progress = savedProgress || recoverNationalAutomaticMeet(world)
-        if (progress && !windMeet.active) {
+        if (progress && !windMeet.active && !relayMeet.active) {
           resumeAutomaticMeet(progress)
           persistAutoMeetProgress()
         }
@@ -424,6 +441,33 @@ async function mergeCloudData(update) {
       const local = game.world.nationalMeets.find(saved => saved.id === meet.id)
       return unsent || (local?.completedMatches > meet.completedMatches ? local : meet)
     })
+    const changedRelayMeets = (update.relayMeets || []).map(meet => {
+      const unsent = pending.map(operation => operation.type === 'relay' ? operation.payload.meet :
+        operation.type === 'patch' ? operation.payload[`dynamic/relayMeets/${meet.schoolId}/${meet.id}`] : null)
+        .filter(value => value?.id === meet.id).at(-1)
+      const local = game.world.relayMeets.find(value => value.id === meet.id)
+      return unsent || (local?.completedMatches > meet.completedMatches ? local : meet)
+    })
+    const changedRelayLineups = (update.relayLineups || []).map(lineup => {
+      const unsent = pending.map(operation => operation.type === 'relay' ? operation.payload.lineups?.find(value => value.id === lineup.id) :
+        operation.type === 'patch' ? operation.payload[`dynamic/relayLineups/${lineup.classId}`] : null).filter(Boolean).at(-1)
+      const local = game.world.relayLineups.find(value => value.id === lineup.id)
+      return unsent || ((local?.updatedAtMs ?? Date.parse(local?.updatedAt)) > (lineup.updatedAtMs ?? Date.parse(lineup.updatedAt)) ? local : lineup)
+    })
+    if (update.relayChampions) {
+      const merged = { ...game.world.relayChampions }
+      const candidates = [...Object.values(update.relayChampions), ...pending.filter(operation => operation.type === 'relay').map(operation => operation.payload.champion)]
+      for (const champion of candidates) if (champion) {
+        const current = merged[champion.schoolId]
+        if (!current || champion.awardedAtMs >= current.awardedAtMs) merged[champion.schoolId] = champion
+      }
+      meta.relayChampions = merged
+    }
+    const newRelayRaces = (update.relayRaces || []).filter(race => !game.world.relayRaces.some(value => value.id === race.id))
+    const savedRelayRace = update.syncedRelayRaceId && game.world.relayRaces.find(race => race.id === update.syncedRelayRaceId)
+    const syncedRelayRace = savedRelayRace?.syncStatus === 'pending'
+      ? { ...(update.relayRaces || []).find(race => race.id === savedRelayRace.id) || savedRelayRace } : null
+    if (syncedRelayRace) delete syncedRelayRace.syncStatus
     const nationalHonors = { ...game.world.nationalHonors }
     for (const [id, honors] of Object.entries(update.nationalHonors || {})) {
       nationalHonors[id] = [...new Map([...(nationalHonors[id] || []), ...honors].map(honor => [honor.meetId, honor])).values()]
@@ -446,9 +490,17 @@ async function mergeCloudData(update) {
     const savedRace = update.syncedRaceId && game.world.races.find(race => race.id === update.syncedRaceId)
     const syncedRace = savedRace?.syncStatus === 'pending' ? { ...savedRace } : null
     if (syncedRace) delete syncedRace.syncStatus
-    await saveChanges({ ...game.world, ...meta }, { schools: [...changedSchools.values()], students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards, windMeets: changedWindMeets, regionMeets: changedRegionMeets, nationalMeets: changedNationalMeets },
+    await saveChanges({ ...game.world, ...meta }, { schools: [...changedSchools.values()], students: [...changed.values()], teams: [...changedTeams.values()], races: [...newRaces, ...(syncedRace ? [syncedRace] : [])], awards: newAwards, windMeets: changedWindMeets, regionMeets: changedRegionMeets, nationalMeets: changedNationalMeets,
+      relayMeets: changedRelayMeets, relayLineups: changedRelayLineups, relayRaces: [...newRelayRaces, ...(syncedRelayRace ? [syncedRelayRace] : [])] },
       { acknowledge: update.acknowledge, cache: update.cache })
     Object.assign(game.world, meta)
+    for (const [table, values] of [['relayMeets', changedRelayMeets], ['relayLineups', changedRelayLineups]]) for (const value of values) {
+      const index = game.world[table].findIndex(saved => saved.id === value.id)
+      if (index < 0) game.world[table].push(value)
+      else game.world[table][index] = value
+    }
+    game.world.relayRaces.push(...newRelayRaces)
+    if (syncedRelayRace) { Object.assign(savedRelayRace, syncedRelayRace); delete savedRelayRace.syncStatus }
     for (const meet of changedWindMeets) {
       const index = game.world.windMeets.findIndex(saved => saved.id === meet.id)
       if (index < 0) game.world.windMeets.push(meet)
@@ -751,6 +803,7 @@ async function finishAutomaticHeat() {
 }
 
 function startSchoolItinerary(schoolList, scope) {
+  if (relayMeet.active) { notify('大隊接力尚未結束，請先完成目前賽程。'); return false }
   if (windMeet.active) { notify('風速小子選拔賽尚未結束，請先完成目前賽程。'); return false }
   if (autoMeet.active) {
     notify('已有自動百米賽正在進行，請先完成目前賽程。')
@@ -985,7 +1038,7 @@ export async function recordHeat({ id, sessionId, schoolId, classId = null, clas
 export async function createSchoolWindMeet(schoolId, { id, nationalRunId } = {}) {
   return transaction(async () => {
     const nationalCurrent = nationalRunId && windMeet.active && windMeet.scope === 'national' && windMeet.runId === nationalRunId
-    if (autoMeet.active || (windMeet.active && !nationalCurrent) || (nationalRunId && !nationalCurrent)) throw new Error('請先完成目前的自動賽程。')
+    if (relayMeet.active || autoMeet.active || (windMeet.active && !nationalCurrent) || (nationalRunId && !nationalCurrent)) throw new Error('請先完成目前的自動賽程。')
     const existing = id && game.world.windMeets.find(meet => meet.id === id)
     if (existing) return existing
     const school = getSchool(schoolId)
@@ -1001,6 +1054,64 @@ export async function createSchoolWindMeet(schoolId, { id, nationalRunId } = {})
   })
 }
 
+export async function createSchoolRelayMeet(schoolId, classIds = []) {
+  return transaction(async () => {
+    if (autoMeet.active || windMeet.active || relayMeet.active) throw new Error('請先完成目前的自動賽程。')
+    const school = getSchool(schoolId)
+    if (!school) throw new Error('請先選擇學校。')
+    const ids = new Set(classIds)
+    if (ids.size && (ids.size < 2 || ids.size > 8)) throw new Error('友誼接力請選擇 2～8 個班級。')
+    if ([...ids].some(id => getClass(id)?.schoolId !== schoolId)) throw new Error('請選擇同一所學校的班級。')
+    const saved = new Map(game.world.relayLineups.map(lineup => [lineup.classId, lineup]))
+    const lineups = school.classes.filter(cls => !ids.size || ids.has(cls.id))
+      .map(cls => prepareRelayLineup(cls, getStudent, saved.get(cls.id)))
+    const meet = createRelayMeet(school, lineups, [...ids])
+    const patch = Object.fromEntries(lineups.map(lineup => [`dynamic/relayLineups/${lineup.classId}`, lineup]))
+    if (!meet.friendly) patch[`dynamic/relayMeets/${schoolId}/${meet.id}`] = meet
+    await saveChanges(game.world, { relayLineups: lineups, relayMeets: meet.friendly ? [] : [meet] },
+      { enqueue: cloudOperation('patch', patch) })
+    for (const lineup of lineups) {
+      const index = game.world.relayLineups.findIndex(saved => saved.id === lineup.id)
+      if (index < 0) game.world.relayLineups.push(lineup)
+      else game.world.relayLineups[index] = lineup
+    }
+    if (!meet.friendly) game.world.relayMeets.push(meet)
+    game.revision++
+    queueSync()
+    return meet
+  })
+}
+
+async function recordRelayMatch(meet, match, results, startedAt, finishedAt) {
+  return transaction(async () => {
+    const saved = game.world.relayMeets.find(value => value.id === meet.id) || meet
+    if (game.world.relayRaces.some(race => race.id === match.id)) return saved
+    const next = completeRelayMatch(saved, match.id, results, finishedAt)
+    const officialResults = next.rounds.flatMap(round => round.matches).find(value => value.id === match.id).results
+    const race = { id: match.id, mode: 'relay', meetId: meet.id, relayMatchId: match.id,
+      schoolId: meet.schoolId, round: match.round, number: match.number,
+      startedAt, finishedAt, results: officialResults, syncStatus: 'pending' }
+    const champion = next.status === 'complete' && next.champion ? {
+      schoolId: meet.schoolId, classId: next.champion.classId, className: next.champion.className,
+      meetId: meet.id, time: next.champion.time, title: '風速小班',
+      awardedAt: finishedAt, awardedAtMs: Date.parse(finishedAt),
+    } : null
+    const champions = { ...game.world.relayChampions }
+    const previous = champions[meet.schoolId]
+    if (champion && (!previous || champion.awardedAtMs >= previous.awardedAtMs)) champions[meet.schoolId] = champion
+    await saveChanges({ ...game.world, relayChampions: champions }, { relayMeets: [next], relayRaces: [race] },
+      { enqueue: cloudOperation('relay', { meet: next, race, ...(champion ? { champion } : {}) }) })
+    const index = game.world.relayMeets.findIndex(value => value.id === meet.id)
+    if (index < 0) game.world.relayMeets.push(next)
+    else game.world.relayMeets[index] = next
+    game.world.relayRaces.push(race)
+    game.world.relayChampions = champions
+    game.revision++
+    queueSync()
+    return next
+  })
+}
+
 async function recordWindMatch(meet, match, results, startedAt, finishedAt) {
   await recordHeat({ id: match.id, sessionId: meet.id, schoolId: meet.schoolId, classIds: match.classIds,
     mode: 'wind-selection', windMatchId: match.id, heat: meet.completedMatches + 1, results, startedAt, finishedAt })
@@ -1009,7 +1120,7 @@ async function recordWindMatch(meet, match, results, startedAt, finishedAt) {
 
 export async function createRegionMeet(city, schoolIds = []) {
   return transaction(async () => {
-    if (autoMeet.active || windMeet.active) throw new Error('請先完成或終止目前的自動賽程。')
+    if (relayMeet.active || autoMeet.active || windMeet.active) throw new Error('請先完成或終止目前的自動賽程。')
     const selected = new Set(schoolIds)
     const eligible = game.world.schools.filter(school => normalizeRegion(school.city) === normalizeRegion(city) && (!selected.size || selected.has(school.id)))
     const meet = createRegionalMeet(city, eligible, getStudent, game.world.windChampions, getClass, { friendly: selected.size > 0 })
@@ -1033,7 +1144,7 @@ async function recordRegionalMatch(meet, match, results, startedAt, finishedAt) 
 
 export async function createNationalMeet(cities, { friendly = false } = {}) {
   return transaction(async () => {
-    if (autoMeet.active || windMeet.active) throw new Error('請先完成目前的自動賽程。')
+    if (relayMeet.active || autoMeet.active || windMeet.active) throw new Error('請先完成目前的自動賽程。')
     const meet = createNationalChampionship(cities, game.world.regionMeets, getStudent, { friendly, getSchool })
     if (!friendly) {
       await saveChanges(game.world, { nationalMeets: [meet] }, { enqueue: cloudOperation('patch', {

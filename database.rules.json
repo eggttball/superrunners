@@ -153,6 +153,89 @@
                   }
                 }
               },
+              "relayLineups": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$classId": {
+                  ".validate": "newData.hasChildren(['id', 'classId', 'schoolId', 'signature', 'rankedIds', 'studentIds', 'updatedAt', 'updatedAtMs']) && newData.child('id').val() === $classId && newData.child('classId').val() === $classId && newData.child('classId').isString() && newData.child('classId').val().beginsWith(newData.child('schoolId').val() + '-') && newData.child('classId').val().matches(/^.+-[1-3]-(0[1-9]|1[0-6])$/) && newData.parent().parent().parent().child('static/schools').child(newData.child('schoolId').val()).exists() && newData.child('signature').isString() && newData.child('rankedIds').hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']) && newData.child('studentIds').hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']) && newData.child('studentIds/0').val() === newData.child('rankedIds/0').val() && newData.child('studentIds/15').val() === newData.child('rankedIds/1').val() && newData.child('updatedAt').isString() && newData.child('updatedAtMs').isNumber() && (!data.exists() || newData.child('updatedAtMs').val() >= data.child('updatedAtMs').val())",
+                  "rankedIds": {
+                    "$index": {
+                      ".validate": "$index.matches(/^([0-9]|1[0-5])$/) && newData.isString() && newData.val().matches(/^[A-Z]{2,3}[0-9]{7}$/)"
+                    }
+                  },
+                  "studentIds": {
+                    "$index": {
+                      ".validate": "$index.matches(/^([0-9]|1[0-5])$/) && newData.isString() && newData.val().matches(/^[A-Z]{2,3}[0-9]{7}$/)"
+                    }
+                  }
+                }
+              },
+              "relayMeets": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$schoolId": {
+                  "$meetId": {
+                    ".validate": "newData.hasChildren(['id', 'schoolId', 'kind', 'status', 'classIds', 'entrants', 'rounds', 'startedAt']) && newData.child('id').val() === $meetId && newData.child('schoolId').val() === $schoolId && newData.parent().parent().parent().parent().child('static/schools').child($schoolId).exists() && newData.child('kind').val() === 'relay' && newData.child('friendly').val() === false && (newData.child('status').val() === 'running' || newData.child('status').val() === 'complete') && newData.child('startedAt').isString() && (!data.exists() || newData.child('startedAt').val() === data.child('startedAt').val()) && newData.child('completedMatches').isNumber() && newData.child('completedMatches').val() >= 0 && (!data.exists() || (newData.child('completedMatches').val() >= data.child('completedMatches').val() && (data.child('status').val() !== 'complete' || newData.child('status').val() === 'complete')))",
+                    "entrants": {
+                      "$index": {
+                        ".validate": "newData.hasChildren(['classId', 'className', 'grade', 'classNumber', 'color', 'studentIds']) && newData.child('classId').isString() && newData.child('classId').val().beginsWith($schoolId + '-') && newData.child('grade').isNumber() && newData.child('grade').val() >= 1 && newData.child('grade').val() <= 3 && newData.child('classNumber').isNumber() && newData.child('classNumber').val() >= 1 && newData.child('classNumber').val() <= 16 && newData.child('studentIds').hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'])",
+                        "studentIds": {
+                          "$studentIndex": {
+                            ".validate": "$studentIndex.matches(/^([0-9]|1[0-5])$/) && newData.isString()"
+                          }
+                        }
+                      }
+                    },
+                    "rounds": {
+                      "$round": {
+                        ".validate": "newData.hasChildren(['number', 'matches']) && newData.child('number').isNumber() && newData.child('number').val() >= 1",
+                        "matches": {
+                          "$match": {
+                            ".validate": "newData.hasChildren(['id', 'round', 'number', 'classIds', 'status', 'qualifyCount']) && newData.child('classIds').hasChild('0') && !newData.child('classIds').hasChild('8') && newData.child('qualifyCount').isNumber() && newData.child('qualifyCount').val() >= 1 && newData.child('qualifyCount').val() <= 3 && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'bye' || newData.child('status').val() === 'done')"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "relayRaces": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$schoolId": {
+                  "$raceId": {
+                    ".validate": "newData.hasChildren(['id', 'schoolId', 'meetId', 'relayMatchId', 'results', 'startedAt', 'finishedAt']) && newData.child('id').val() === $raceId && newData.child('relayMatchId').val() === $raceId && newData.child('schoolId').val() === $schoolId && newData.parent().parent().parent().parent().child('static/schools').child($schoolId).exists() && newData.child('mode').val() === 'relay' && newData.child('results').hasChildren(['0', '1']) && !newData.child('results').hasChild('8') && newData.child('startedAt').isString() && newData.child('finishedAt').isString() && (!data.exists() || newData.child('finishedAt').val() === data.child('finishedAt').val())",
+                    "results": {
+                      "$index": {
+                        ".validate": "$index.matches(/^[0-7]$/) && newData.hasChildren(['classId', 'time', 'lane', 'place', 'studentIds', 'lineup', 'splits', 'exchanges']) && newData.child('classId').isString() && newData.child('classId').val().beginsWith($schoolId + '-') && newData.child('time').isNumber() && newData.child('time').val() >= 100 && newData.child('time').val() <= 2000 && newData.child('lane').isNumber() && newData.child('lane').val() >= 1 && newData.child('lane').val() <= 8 && newData.child('place').isNumber() && newData.child('place').val() >= 1 && newData.child('place').val() <= 8 && newData.child('studentIds').hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']) && newData.child('lineup').hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']) && newData.child('splits').hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']) && newData.child('exchanges').hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14'])",
+                        "studentIds": {
+                          "$studentIndex": {
+                            ".validate": "$studentIndex.matches(/^([0-9]|1[0-5])$/) && newData.isString() && newData.val().matches(/^[A-Z]{2,3}[0-9]{7}$/)"
+                          }
+                        },
+                        "lineup": {
+                          "$leg": {
+                            ".validate": "$leg.matches(/^([0-9]|1[0-5])$/) && newData.hasChildren(['id', 'name', 'classId', 'schoolId', 'leg']) && newData.child('schoolId').val() === $schoolId && newData.child('leg').isNumber() && newData.child('leg').val() >= 1 && newData.child('leg').val() <= 16"
+                          }
+                        },
+                        "splits": {
+                          "$leg": {
+                            ".validate": "$leg.matches(/^([0-9]|1[0-5])$/) && newData.hasChildren(['studentId', 'leg', 'time', 'startDistance', 'endDistance']) && newData.child('time').isNumber() && newData.child('time').val() > 0 && newData.child('time').val() <= 120 && newData.child('startDistance').isNumber() && newData.child('startDistance').val() >= 0 && newData.child('endDistance').isNumber() && newData.child('endDistance').val() > newData.child('startDistance').val() && newData.child('endDistance').val() <= 1600"
+                          }
+                        },
+                        "exchanges": {
+                          "$exchange": {
+                            ".validate": "$exchange.matches(/^([0-9]|1[0-4])$/) && newData.hasChildren(['index', 'fromStudentId', 'toStudentId', 'boundary', 'zoneStart', 'zoneEnd', 'distance', 'time', 'preRunStart', 'overlapDuration', 'loss', 'prepareTime']) && newData.child('index').isNumber() && newData.child('index').val() + '' === $exchange && newData.child('boundary').isNumber() && newData.child('boundary').val() === 100 * (newData.child('index').val() + 1) && newData.child('zoneStart').val() === newData.child('boundary').val() - 10 && newData.child('zoneEnd').val() === newData.child('boundary').val() + 20 && newData.child('distance').isNumber() && newData.child('distance').val() >= newData.child('zoneStart').val() && newData.child('distance').val() <= newData.child('zoneEnd').val() && newData.child('time').isNumber() && newData.child('time').val() > 0 && newData.child('preRunStart').isNumber() && newData.child('preRunStart').val() <= newData.child('time').val() && newData.child('overlapDuration').isNumber() && newData.child('overlapDuration').val() >= 0 && newData.child('loss').isNumber() && newData.child('loss').val() >= 0 && newData.child('prepareTime').isNumber() && newData.child('prepareTime').val() <= newData.child('time').val()"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "relayChampions": {
+                ".write": "auth != null && auth.uid === $uid && auth.token.email === 'eggttball@gmail.com' && root.child('users').child($uid).child('manifest/worldId').val() === $worldId",
+                "$schoolId": {
+                  ".validate": "newData.hasChildren(['schoolId', 'classId', 'className', 'meetId', 'time', 'title', 'awardedAt', 'awardedAtMs']) && newData.child('schoolId').val() === $schoolId && newData.parent().parent().parent().child('static/schools').child($schoolId).exists() && newData.child('classId').isString() && newData.child('classId').val().beginsWith($schoolId + '-') && newData.child('title').val() === '風速小班' && newData.child('time').isNumber() && newData.child('time').val() >= 100 && newData.child('awardedAt').isString() && newData.child('awardedAtMs').isNumber() && (!data.exists() || newData.child('awardedAtMs').val() >= data.child('awardedAtMs').val())"
+                }
+              },
               "addedStudents": {
                 ".indexOn": [
                   "admittedAt"

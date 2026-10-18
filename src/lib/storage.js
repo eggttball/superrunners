@@ -1,6 +1,6 @@
 const DATABASE = 'superrunners-taiwan-v3'
 const LEGACY_DATABASES = ['superrunners-taiwan-v1', 'superrunners-taiwan-v2']
-const TABLES = ['schools', 'students', 'teams', 'races', 'awards', 'windMeets', 'regionMeets', 'nationalMeets']
+const TABLES = ['schools', 'students', 'teams', 'races', 'awards', 'windMeets', 'regionMeets', 'nationalMeets', 'relayMeets', 'relayRaces', 'relayLineups']
 let connection
 let legacyCleanup
 
@@ -31,7 +31,7 @@ function clearLegacyDatabases() {
 export function openDatabase() {
   if (connection) return connection
   connection = clearLegacyDatabases().then(() => new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 5)
+    const request = indexedDB.open(DATABASE, 6)
     let abandoned = false
     request.onupgradeneeded = () => {
       const db = request.result
@@ -67,7 +67,7 @@ function value(request) {
 }
 
 export function metadata(world) {
-  const { schools, students, teams, races, awards, windMeets, regionMeets, nationalMeets, ...meta } = world
+  const { schools, students, teams, races, awards, windMeets, regionMeets, nationalMeets, relayMeets, relayRaces, relayLineups, ...meta } = world
   return meta
 }
 
@@ -114,11 +114,14 @@ export async function loadWorld(onProgress = () => {}) {
   if (savedMeta.schemaVersion !== 3) throw new Error('這份存檔的版本無法讀取；原始資料已保留。')
   const world = { ...savedMeta }
   TABLES.forEach((table, index) => { world[table] = tables[index] })
+  world.relayChampions ||= {}
   if (!world.schools.length || !world.students.length || !world.teams.length) throw new Error('本機存檔不完整，已停止載入以保留資料。')
   return world
 }
 
 export async function saveInitialWorld(world, onProgress = () => {}) {
+  for (const table of ['relayMeets', 'relayRaces', 'relayLineups']) world[table] ||= []
+  world.relayChampions ||= {}
   const db = await openDatabase()
   const owner = crypto.randomUUID()
   // Claim and clear in one transaction. A second initializer can replace an interrupted
@@ -190,7 +193,7 @@ export async function saveChanges(world, changes = {}, { enqueue, acknowledge, c
           const nextMeta = metadata(world)
           // Automatic-meet progress is browser-local state. Cloud merges and
           // race saves write full metadata, so preserve the newest local value.
-          for (const key of ['autoMeetProgress', 'nationalWindMeetProgress']) {
+          for (const key of ['autoMeetProgress', 'nationalWindMeetProgress', 'relayMeetProgress']) {
             if (readMeta.result && Object.hasOwn(readMeta.result, key)) nextMeta[key] = readMeta.result[key]
           }
           nextMeta.cancelledAutomaticMeetRunIds = [...new Set([
@@ -232,7 +235,7 @@ export async function cachedCloudData(id) {
 // table consistent without duplicating the entire national population in memory.
 export async function exportWorld(world, onProgress = () => {}) {
   const parts = ['{']
-  const { autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, ...exportMeta } = metadata(world)
+  const { autoMeetProgress, nationalWindMeetProgress, relayMeetProgress, cancelledAutomaticMeetRunIds, ...exportMeta } = metadata(world)
   const meta = { ...exportMeta, exportedAt: new Date().toISOString() }
   parts.push(JSON.stringify(meta).slice(1, -1))
   for (const table of TABLES) {

@@ -6,12 +6,12 @@
 
 - IndexedDB 資料庫名稱：`superrunners-taiwan-v3`
 - 資料結構版本：`schemaVersion: 3`
-- IndexedDB object store 版本：`5`，升級保留原有資料。
+- IndexedDB object store 版本：`6`，升級保留原有資料。
 - 每個瀏覽器各自保有本機快取，同一帳號連結同一個雲端世界。
 - 既有存檔首次連接時上傳至雲端。新的瀏覽器從雲端還原，不再重新隨機生成世界；有本機固定資料時不再重複下載。
 - 舊版資料庫 `superrunners-taiwan-v1`、`superrunners-taiwan-v2` 會在啟動時清除。
 
-資料庫使用一個 `meta` store、八個實體資料表與兩個同步資料表（其餘皆以 `id` 為 key）：
+資料庫使用一個 `meta` store、十一個實體資料表與兩個同步資料表（其餘皆以 `id` 為 key）：
 
 | Store | 用途 |
 | --- | --- |
@@ -24,6 +24,9 @@
 | `windMeets` | 風速小子選拔賽的參賽名單、每輪對戰與歷屆冠軍 |
 | `regionMeets` | 縣市運百米淘汰賽的學校代表、每輪晉級名單、決賽頒獎名次與歷屆風速王子 |
 | `nationalMeets` | 全國大賽的縣市代表、淘汰歷程、決賽前六名與歷屆風神 |
+| `relayLineups` | 每班固定的 16 棒名單與前十六名排序簽章 |
+| `relayMeets` | 全校大隊接力的分組、晉級關係及歷屆冠軍 |
+| `relayRaces` | 正式接力的團隊總時間、名單快照、分段與交棒資料 |
 | `outbox` | 與本機變更一起保存的待同步動作；雲端確認後移除 |
 | `cloudCache` | 排名等按需查詢的快照及更新時間 |
 
@@ -31,7 +34,7 @@
 
 ## 完整匯出 JSON
 
-匯出檔案將 `meta` 與八個實體 stores 合併成一個 JSON 物件；`outbox`、`cloudCache` 不匯出。這是本機目前快照，不代表所有尚未瀏覽學校的動態資料都已重新讀取。結構如下：
+匯出檔案將 `meta` 與十一個實體 stores 合併成一個 JSON 物件；`outbox`、`cloudCache` 與自動賽本機進度不匯出。這是本機目前快照，不代表所有尚未瀏覽學校的動態資料都已重新讀取。結構如下：
 
 ```js
 {
@@ -61,7 +64,11 @@
   regionChampions: {},
   nationalMeets: [],
   nationalChampion: null,
-  nationalHonors: {}
+  nationalHonors: {},
+  relayLineups: [],
+  relayMeets: [],
+  relayRaces: [],
+  relayChampions: {}
 }
 ```
 
@@ -487,3 +494,15 @@ IndexedDB v5 新增 `nationalMeets` store；資料庫名稱、世界 `schemaVers
 `nationalChampion` 每屆正式決賽完成後才替換。顯示稱號優先順序是 **風神 > 風速王子 > 風速小子**，同一人只顯示最高稱號；各稱號來源獨立保存。個人頁可查看歷屆風神榮譽及全國決賽第 2～6 名，即使已被下一屆冠軍取代，歷史榮譽仍保留。
 
 全國總冠軍賽名次標籤為冠軍「風神」、第二名「亞軍」、第三名「季軍」、第四名「殿軍」；第五、第六名仍顯示「第 5 名」、「第 6 名」。友誼賽第一名只稱「冠軍」，其他名次標籤相同。
+
+## 大隊接力
+
+`relayLineups` 每班一筆，以班級 ID 作為 `id`，包含 `classId`、`schoolId`、`rankedIds`（依最佳百米／預估百米排序的前十六人）、`signature`、`studentIds`（實際棒次）、`updatedAt`、`updatedAtMs`。第一棒是最快者，第十六棒是第二快，其餘十四棒隨機排列。下次開賽前只有前十六人的排序改變才重新安排；同一屆接力固定名單。
+
+`relayMeets` 保存 `schoolId`、`schoolName`、`classIds`、`entrants`、`rounds`、`completedMatches`、`status`、`startedAt`、`finishedAt`、`champion`。各參賽班級的 `entrants.studentIds` 為本屆固定棒次。每輪 `matches` 包含 `classIds`、`sourceMatchIds`、`qualifyCount`、`qualifiedClassIds`、`results` 和 `status`；來源場次連結保留多隊晉級的完整歷程。單班輪空不產生秒數。
+
+`relayRaces` 每一場一筆，以場次 ID 作為 `id`，包含 `mode: 'relay'`、`meetId`、`relayMatchId`、`schoolId`、`round`、`number`、`startedAt`、`finishedAt`。`results` 的每班資料含 `classId`、`className`、`color`、`lane`、`time`（團隊總秒數）、`place`、`qualified`、`studentIds`、`lineup`（十六人當時個資快照）、`splits`、`exchanges`。分段只描述接力，不更新個人百米最佳、個人排名或百米獎牌。
+
+`relayChampions[schoolId]` 是現任「風速小班」：`classId`、`className`、`meetId`、`time`、`title`、`awardedAt`、`awardedAtMs`。每校最新一屆冠軍持有稱號，歷屆冠軍仍可從 `relayMeets` 查看。
+
+`meta.relayMeetProgress` 僅保存在本機，包含本屆 `meet`、`matchId`、已抽取的 `plans`、`elapsed`、`paused`、`speed`、`phase`、尚未消耗的 `pendingClock` 時間區段與日期。開賽、換場、暫停、速度變更及比賽中定期保存；重整後沿用抽取結果與最近進度，最多回退約五秒的實際經過時間，不補跑瀏覽器關閉期間。正式場次保存成功後，即使下一場進度寫入中斷，也會以已提交的場次接續。賽事完成即清除進度。友誼接力僅留下暫時畫面和本機恢復資訊，不進正式歷史或雲端；可重用的班級棒次仍可同步。

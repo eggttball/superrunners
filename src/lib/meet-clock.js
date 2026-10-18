@@ -102,5 +102,19 @@ export function createMeetClock(onTick) {
       }
       return { seconds, at }
     },
+    // A paused/local checkpoint must also preserve time sampled by the clock
+    // but not yet consumed by an asynchronous race controller.
+    snapshotPending() {
+      sample()
+      return segments.map(segment => ({ seconds: (segment.end - segment.start) / 1000 * segment.rate,
+        at: epoch(segment.end), rate: segment.rate }))
+    },
+    restorePending(pending = []) {
+      for (const item of pending) {
+        if (!(item.seconds > 0) || !Number.isFinite(item.at) || !(item.rate > 0)) continue
+        const end = item.at - performance.timeOrigin
+        segments.push({ start: end - item.seconds / item.rate * 1000, end, rate: item.rate })
+      }
+    },
   }
 }

@@ -178,3 +178,20 @@ IndexedDB v5 新增 `nationalMeets`，保留固定世界與既有進度。世界
 每場正式全國賽的 `heat` outbox 動作帶有 `nationalMeet`，最後決賽另帶 `nationalChampion`。同一筆多路徑 PATCH 寫入 `nationalRaces`、`nationalMeets`、參賽者最佳成績與四種排名。決賽同時將前六名分別寫到 `nationalHonors/{studentId}/{meetId}`，保存稱號／名次及時間快照；友誼賽不入 outbox、不寫雲端。
 
 現任風神以 `awardedAtMs` 防止舊離線決賽覆蓋較新冠軍；舊場次仍補傳為歷史紀錄。所有新增路徑仍須管理者的 Auth UID、Email 及 worldId 驗證；`nationalMeets` 僅接受正式賽，成績／榮譽至少 10 秒，跑道及決賽名次限制為 1～6。規則隨 GitHub Actions 在 Hosting 前部署。
+
+## 大隊接力同步
+
+接力新增以下動態路徑，既有固定學校、班級及學生資料無須重新下載或生成：
+
+```text
+dynamic/relayLineups/{classId}             可重用的固定十六棒名單
+dynamic/relayMeets/{schoolId}/{meetId}     正式淘汰賽與完整晉級歷程
+dynamic/relayRaces/{schoolId}/{raceId}     正式團隊總時間、分段、交棒及名單快照
+dynamic/relayChampions/{schoolId}         唯一現任風速小班
+```
+
+選擇學校時只查詢該校的現任稱號。接力開賽前取得該校排名及已保存棒次，排名未變則沿用棒次；離線時使用本機快照。展開接力歷程時才取得該校接力賽事和團隊紀錄，其他學校不讀取。
+
+每場正式接力先在同一個 IndexedDB transaction 保存 `relayRaces`、更新 `relayMeets`、必要時更新 `relayChampions`，並新增 `type: 'relay'` 的 outbox 動作。同步動作以 REST PATCH 上傳團隊結果及歷程，不寫個人 `bests` 或百米排名。斷線不阻止接力繼續；未上傳結果保留 `syncStatus: 'pending'`，網路恢復後重試並移除注記。重試沿用場次 ID，避免重複紀錄。
+
+冠軍依 `awardedAtMs` 比較，只允許最新一屆替換現任稱號，舊離線賽事仍保存歷史但不覆蓋新冠軍。固定棒次也採更新時間保護。`relayMeetProgress` 含目前動畫計畫和本機游標，完全不上传，不從雲端恢復。友誼接力不送正式結果、歷程或稱號。

@@ -5,6 +5,7 @@ import { COUNTIES, compareSchoolOrder } from '../lib/school-order.js'
 import { normalizeRegion, regionalEventName, schoolRepresentatives } from '../lib/regional-selection.js'
 import { fetchRegionHistory, fetchWindChampions, fetchRanking, syncState } from '../lib/cloud.js'
 import { windMeet, startWindMeet } from '../lib/wind-meet.js'
+import { relayMeet } from '../lib/relay-meet.js'
 import RaceView from './RaceView.vue'
 import WindMeetSummary from './WindMeetSummary.vue'
 import WindTitleBadge from './WindTitleBadge.vue'
@@ -21,7 +22,7 @@ const historyLoading = ref(false)
 const viewedMeet = ref(null)
 let active = true, historyRequest = 0
 const currentRegional = computed(() => windMeet.scope === 'regional' && (windMeet.active || windMeet.phase === 'complete'))
-const busy = computed(() => autoMeet.active || windMeet.active)
+const busy = computed(() => autoMeet.active || windMeet.active || relayMeet.active)
 const schools = computed(() => game.world.schools.filter(school => normalizeRegion(school.city) === city.value).sort(compareSchoolOrder))
 const selectedSchools = computed(() => schools.value.filter(school => selected.value.includes(school.id)))
 const history = computed(() => { game.revision; return game.world.regionMeets.filter(meet => meet.city === city.value).sort((a, b) => b.startedAt.localeCompare(a.startedAt)) })

@@ -31,7 +31,7 @@ export function staticTeam(team) {
 }
 
 export function staticMetadata(world) {
-  const { schools, students, teams, races, awards, windMeets, windChampions, regionMeets, regionChampions, nationalMeets, nationalChampion, nationalHonors, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, nationalWindMeetProgress, cancelledAutomaticMeetRunIds, admissionCursor, exportedAt, ...meta } = world
+  const { schools, students, teams, races, awards, windMeets, windChampions, regionMeets, regionChampions, nationalMeets, nationalChampion, nationalHonors, relayMeets, relayRaces, relayLineups, relayChampions, favoriteSchoolIds, followedTeamIds, settings, cloudBinding, autoMeetProgress, nationalWindMeetProgress, relayMeetProgress, cancelledAutomaticMeetRunIds, admissionCursor, exportedAt, ...meta } = world
   return meta
 }
 
@@ -64,6 +64,13 @@ export function schoolUpload(world, school, students, team, races, awards) {
   for (const award of awards) patch[`dynamic/awards/${school.id}/${award.id}`] = award
   for (const meet of world.windMeets || []) if (meet.schoolId === school.id) patch[`dynamic/windMeets/${school.id}/${meet.id}`] = meet
   if (world.windChampions?.[school.id]) patch[`dynamic/windChampions/${school.id}`] = world.windChampions[school.id]
+  for (const meet of world.relayMeets || []) if (meet.schoolId === school.id && !meet.friendly) patch[`dynamic/relayMeets/${school.id}/${meet.id}`] = meet
+  for (const race of world.relayRaces || []) if (race.schoolId === school.id && !race.friendly) {
+    const { syncStatus, ...savedRace } = race
+    patch[`dynamic/relayRaces/${school.id}/${race.id}`] = savedRace
+  }
+  for (const lineup of world.relayLineups || []) if (lineup.schoolId === school.id) patch[`dynamic/relayLineups/${lineup.classId}`] = lineup
+  if (world.relayChampions?.[school.id]) patch[`dynamic/relayChampions/${school.id}`] = world.relayChampions[school.id]
   // One owner school uploads each regional meet/champion during bootstrap.
   for (const meet of world.regionMeets || []) if (meet.schoolIds[0] === school.id) patch[`dynamic/regionMeets/${meet.city}/${meet.id}`] = meet
   for (const [city, champion] of Object.entries(world.regionChampions || {})) if (champion.schoolId === school.id) patch[`dynamic/regionChampions/${city}`] = champion
@@ -85,4 +92,35 @@ export function sortedScores(scores) {
       while (first > 0 && Math.round(entries[first - 1].time * 100) === Math.round(entry.time * 100)) first--
       return { ...entry, rank: first + 1 }
     })
+}
+
+// RTDB may represent short or sparse arrays as numeric-key objects. Relay
+// histories also contain nested lineup/split/exchange arrays, so normalize
+// recursively instead of leaving hidden object-shaped lists in restored data.
+const RELAY_ARRAY_FIELDS = new Set(['rankedIds', 'studentIds', 'classIds', 'entrants', 'rounds', 'matches',
+  'sourceMatchIds', 'results', 'qualifiedClassIds', 'lineup', 'splits', 'exchanges', 'legs', 'plans', 'samples'])
+
+export function normalizeRelayData(data) {
+  if (Array.isArray(data)) return data.map(normalizeRelayData)
+  if (!data || typeof data !== 'object') return data
+  const keys = Object.keys(data)
+  if (keys.length && keys.every(key => /^(0|[1-9]\d*)$/.test(key))) {
+    return keys.sort((a, b) => Number(a) - Number(b)).map(key => normalizeRelayData(data[key]))
+  }
+  return Object.fromEntries(Object.entries(data).map(([key, item]) => [key,
+    RELAY_ARRAY_FIELDS.has(key) ? values(item).map(normalizeRelayData) : normalizeRelayData(item)]))
+}
+
+export function normalizeRelayMeet(meet) {
+  const normalized = normalizeRelayData(meet)
+  return { ...normalized, classIds: normalized.classIds || [], entrants: normalized.entrants || [],
+    rounds: (normalized.rounds || []).map(round => ({ ...round, matches: (round.matches || []).map(match => ({ ...match,
+      classIds: match.classIds || [], sourceMatchIds: match.sourceMatchIds || [], results: match.results || [],
+      qualifiedClassIds: match.qualifiedClassIds || [] })) })) }
+}
+
+export function normalizeRelayRace(race) {
+  const normalized = normalizeRelayData(race)
+  return { ...normalized, results: (normalized.results || []).map(result => ({ ...result,
+    studentIds: result.studentIds || [], lineup: result.lineup || [], splits: result.splits || [], exchanges: result.exchanges || [] })) }
 }

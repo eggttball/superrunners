@@ -5,6 +5,7 @@ import { COUNTIES } from '../lib/school-order.js'
 import { regionalDelegation } from '../lib/national-championship.js'
 import { fetchRegionalDelegations, fetchNationalHistory, syncState } from '../lib/cloud.js'
 import { windMeet, startWindMeet } from '../lib/wind-meet.js'
+import { relayMeet } from '../lib/relay-meet.js'
 import RaceView from './RaceView.vue'
 import WindMeetSummary from './WindMeetSummary.vue'
 import WindTitleBadge from './WindTitleBadge.vue'
@@ -19,7 +20,7 @@ const readError = ref('')
 const viewedMeet = ref(null)
 let active = true, requestId = 0
 const currentNational = computed(() => windMeet.scope === 'championship' && (windMeet.active || windMeet.phase === 'complete'))
-const busy = computed(() => autoMeet.active || windMeet.active)
+const busy = computed(() => autoMeet.active || windMeet.active || relayMeet.active)
 const counties = computed(() => {
   game.revision
   return COUNTIES.map(city => ({ city, representatives: regionalDelegation(city, game.world.regionMeets, getStudent, getSchool) }))
