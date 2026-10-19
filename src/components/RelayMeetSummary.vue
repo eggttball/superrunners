@@ -1,8 +1,9 @@
 <script setup vapor>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { game, getClass, getSchool, getStudent, timeText, dateText } from '../lib/game.js'
+import { game, getClass, getSchool, getStudent, getWindTitle, timeText, dateText } from '../lib/game.js'
 import Icon from './Icon.vue'
 import PixelRunner from './PixelRunner.vue'
+import WindTitleBadge from './WindTitleBadge.vue'
 
 const props = defineProps({ meet: { type: Object, required: true } })
 defineEmits(['close'])
@@ -25,9 +26,9 @@ const roster = computed(() => {
   const result = selection.result
   return (result?.studentIds || entry?.studentIds || []).map((id, index) => {
     const leg = result?.legs?.find(item => item.studentId === id) || result?.splits?.find(item => item.studentId === id) || result?.legs?.[index]
-    const student = leg?.student || result?.lineup?.find(item => item.id === id || item.studentId === id) || result?.students?.find(item => item.id === id) || getStudent(id)
+    const student = getStudent(id) || leg?.student || result?.lineup?.find(item => item.id === id || item.studentId === id) || result?.students?.find(item => item.id === id)
     const duration = Number.isFinite(leg?.time) ? leg.time : Number.isFinite(leg?.endTime) && Number.isFinite(leg?.startTime) ? leg.endTime - leg.startTime : null
-    return { id, index, student, duration }
+    return { id, index, student, duration, windTitle: getWindTitle(id) }
   })
 })
 watch(() => props.meet?.id, () => { collapsedIds.value = new Set(); selectedRoster.value = null })
@@ -183,7 +184,7 @@ watch(() => tree.value.width, centerTree)
     </section>
     <section v-if="selectedRoster" class="panel relay-summary-roster">
       <div class="section-title"><div><span class="eyebrow">16 LEGS · ONE TEAM</span><h2>{{ rosterName() }} · 接力名單</h2></div><div class="relay-roster-controls"><b v-if="selectedRoster.result?.time != null" class="mono">{{ timeText(selectedRoster.result.time) }}s</b><button type="button" class="btn small" @click="selectedRoster = null"><Icon name="close" :size="15" />收合名單</button></div></div>
-      <div class="relay-summary-roster-grid"><button type="button" v-for="athlete in roster" :key="athlete.id" class="relay-summary-athlete" @click="game.studentId = athlete.id"><b>{{ athlete.index + 1 }}</b><PixelRunner :seed="String(athlete.id)" :gender="athlete.student?.gender" :height="athlete.student?.height" :weight="athlete.student?.weight" :color="teamColor({ classId: selectedRoster.classId })" :size="32" /><span><strong>{{ athlete.student?.name || '接力隊員' }}</strong><small>{{ athlete.student?.studentNumber || '第 ' + (athlete.index + 1) + ' 棒' }}</small></span><small v-if="athlete.duration != null" class="mono">{{ timeText(athlete.duration) }}s</small></button></div>
+      <div class="relay-summary-roster-grid"><button type="button" v-for="athlete in roster" :key="athlete.id" class="relay-summary-athlete" @click="game.studentId = athlete.id"><b>{{ athlete.index + 1 }}</b><PixelRunner :seed="String(athlete.id)" :gender="athlete.student?.gender" :height="athlete.student?.height" :weight="athlete.student?.weight" :color="teamColor({ classId: selectedRoster.classId })" :size="32" /><span class="relay-summary-athlete-info"><strong><span class="relay-roster-gender" :class="athlete.student?.gender === '男' ? 'male' : 'female'" :title="athlete.student?.gender || '性別未設定'" :aria-label="athlete.student?.gender || '性別未設定'"><Icon :name="athlete.student?.gender === '男' ? 'male' : 'female'" :size="12" /></span><span class="relay-summary-athlete-name">{{ athlete.student?.name || '接力隊員' }}</span><span v-if="athlete.student?.isSchoolTeam" class="relay-roster-school-team" title="田徑隊" aria-label="田徑隊"><Icon name="sprint" :size="14" /></span></strong><span class="relay-roster-identities"><WindTitleBadge v-if="athlete.windTitle" :student-id="athlete.id" /><small>{{ athlete.student?.studentNumber || '第 ' + (athlete.index + 1) + ' 棒' }}</small></span><small class="relay-roster-best"><Icon name="trophy" :size="12" />最佳百米 <b class="mono">{{ athlete.student?.best100 > 0 ? timeText(athlete.student.best100) + 's' : '尚無紀錄' }}</b></small></span><small v-if="athlete.duration != null" class="mono relay-roster-leg-time" :title="'本棒時間'">{{ timeText(athlete.duration) }}s</small></button></div>
     </section>
   </div>
 </template>
@@ -246,10 +247,22 @@ watch(() => tree.value.width, centerTree)
 .relay-summary-athlete { min-width: 0; display: flex; align-items: center; gap: 7px; padding: 8px; border: 1px solid #b4c4b3; border-radius: 4px; background: #fffdf4; color: #263c59; text-align: left; cursor: pointer; }
 .relay-summary-athlete:hover { border-color: #bf793d; background: #fff0bd; }
 .relay-summary-athlete > b { flex-shrink: 0; width: 16px; color: #9e6a42; font: 800 11px var(--mono, monospace); text-align: center; }
-.relay-summary-athlete > span { min-width: 0; flex: 1; display: grid; gap: 4px; }
-.relay-summary-athlete strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.relay-summary-athlete-info { min-width: 0; flex: 1; display: grid; gap: 4px; }
+.relay-summary-athlete-info > strong { min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.relay-summary-athlete-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.relay-roster-gender { display: inline-grid; place-items: center; flex: 0 0 16px; width: 16px; height: 16px; border: 1px solid currentColor; border-radius: 50%; }
+.relay-roster-gender.male { color: #39759a; background: #d9edf6; }
+.relay-roster-gender.female { color: #aa5870; background: #f8dce3; }
+.relay-roster-school-team { display: inline-grid; place-items: center; flex: 0 0 20px; width: 20px; height: 20px; border: 1px solid #bd6226; border-radius: 4px; background: #ffe3a2; color: #873710; }
+.relay-roster-identities { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.relay-roster-identities > small { min-width: 0; overflow: hidden; color: #788875; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.relay-roster-identities :deep(.wind-title-badge) { flex-shrink: 0; padding: 2px 5px; font-size: 9px; }
+.relay-roster-identities :deep(.wind-title-badge svg) { width: 12px; height: 12px; }
+.relay-roster-best { display: flex; align-items: center; gap: 3px; color: #788875; font-size: 9px; }
+.relay-roster-best > svg { flex-shrink: 0; color: #a66b3c; }
+.relay-roster-best b { color: #89552f; font-size: 10px; }
 .relay-summary-athlete small { color: #788875; font-size: 9px; }
-.relay-summary-athlete > small { color: #9e6a42; white-space: nowrap; }
+.relay-summary-athlete > .relay-roster-leg-time { color: #9e6a42; white-space: nowrap; }
 @media (max-width: 900px) { .relay-summary-roster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .relay-summary-header { padding: 16px; } .relay-tree-panel, .relay-summary-roster { padding: 12px; } .relay-summary-athlete { padding: 6px; gap: 4px; } .relay-summary-athlete :deep(.pixel-runner) { width: 26px; height: 26px; } .relay-summary-athlete > small { display: none; } }
 </style>
