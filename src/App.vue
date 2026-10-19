@@ -20,7 +20,11 @@ const progressLabel = computed(() => syncState.busy && !syncState.ready ? syncSt
 const displayedProgress = computed(() => syncState.busy && !syncState.ready ? syncState.progress : game.progress)
 const documentTitle = computed(() => {
   if (authState.user && relayMeet.active && relayMeet.match) {
-    return `SUPER RUNNERS | ${relayMeet.meet.schoolName} 大隊接力 第 ${relayMeet.match.round} 輪 · 第 ${relayMeet.match.number} 場`
+    const school = getSchool(relayMeet.meet.schoolId)
+    return `SUPER RUNNERS | ${school?.city || ''}${relayMeet.meet.schoolName} ${relayMeet.scope === 'national' ? '風速小班選拔' : '大隊接力'} 第 ${relayMeet.match.round} 輪 · 第 ${relayMeet.match.number} 場`
+  }
+  if (authState.user && relayMeet.active && relayMeet.scope === 'national') {
+    return `SUPER RUNNERS | 全國風速小班 ${getSchool(relayMeet.schoolIds[relayMeet.schoolIndex])?.name || ''}`
   }
   if (authState.user && windMeet.active && windMeet.match) {
     if (windMeet.scope === 'championship') return `SUPER RUNNERS | ${windMeet.meet.eventName} ${windMeet.match.final ? '全國總冠軍賽' : `第 ${windMeet.match.round} 輪 · 第 ${windMeet.match.number} 場`}`

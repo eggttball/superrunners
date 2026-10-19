@@ -8,7 +8,7 @@ import GamePageHeader from './GamePageHeader.vue'
 import WindTitleBadge from './WindTitleBadge.vue'
 import StudentCreateDialog from './StudentCreateDialog.vue'
 import RelayTitleBadge from './RelayTitleBadge.vue'
-import { fetchRanking, fetchTeam, fetchWindChampions, fetchRelayChampions, syncState } from '../lib/cloud.js'
+import { fetchRanking, fetchTeam, fetchWindChampions, fetchRelayHistory, syncState } from '../lib/cloud.js'
 import { cachedCloudData } from '../lib/storage.js'
 import { useCloudRequest } from '../lib/useCloudRequest.js'
 import { sortedScores } from '../lib/cloud-schema.js'
@@ -38,6 +38,17 @@ const schoolTeamClassIds = computed(() => {
   return new Set((school.value?.classes || []).filter(cls => getSchoolTeamCountForClass(cls.id) >= 5).map(cls => cls.id))
 })
 const selectedClass = computed(() => getClass(classId.value))
+const classRelayBest = computed(() => {
+  game.revision
+  let best = Infinity
+  for (const race of game.world.relayRaces || []) {
+    if (race.schoolId !== game.schoolId || race.friendly) continue
+    for (const result of race.results || []) {
+      if (result.classId === classId.value && Number.isFinite(result.time) && result.time > 0) best = Math.min(best, result.time)
+    }
+  }
+  return Number.isFinite(best) ? best : null
+})
 const studentCount = computed(() => school.value?.classes.reduce((sum, cls) => sum + cls.studentIds.length, 0) || 0)
 const rankedStudents = computed(() => {
   game.revision
@@ -131,7 +142,7 @@ watch([grade, classId, scope], () => { page.value = 1 })
 watch(pageCount, count => { if (page.value > count) page.value = count })
 watch([() => game.schoolId, grade, classId, scope, teamOnly, nationalRanking, () => game.navigationRevision, () => syncState.ready], refreshRoster, { immediate: true })
 watch([() => game.schoolId, () => syncState.ready], ([id, ready]) => {
-  if (id && ready) void Promise.allSettled([fetchWindChampions(id), fetchRelayChampions(id)])
+  if (id && ready) void Promise.allSettled([fetchWindChampions(id), fetchRelayHistory(id)])
 }, { immediate: true })
 </script>
 
@@ -148,6 +159,7 @@ watch([() => game.schoolId, () => syncState.ready], ([id, ready]) => {
         <div v-if="!teamOnly && !nationalRanking" class="grade-picker" aria-label="選擇年級"><button v-for="year in 3" :key="year" type="button" :class="{ active: grade === year }" :aria-pressed="grade === year" @click="grade = year">{{ gradeLabels[year - 1] }}<span>{{ school.classes.filter(cls => cls.grade === year).length }} 班</span></button></div>
         <div v-if="!teamOnly && !nationalRanking" class="class-picker" aria-label="選擇班級"><button v-for="cls in classes" :key="cls.id" class="chip" :class="{ active: classId === cls.id, 'has-school-team': schoolTeamClassIds.has(cls.id) }" :title="schoolTeamClassIds.has(cls.id) ? '田徑隊班' : undefined" :aria-label="`${cls.name}，${cls.studentIds.length} 人${schoolTeamClassIds.has(cls.id) ? '，田徑隊班' : ''}`" :aria-pressed="classId === cls.id" @click="classId = cls.id; scope = 'class'"><i class="class-color" :style="{ background: cls.color }"></i>{{ cls.name }}<RelayTitleBadge :class-id="cls.id" compact /><small>{{ cls.studentIds.length }} 人</small></button></div>
         <div class="roster-toolbar"><div><strong>{{ tableLabel }}</strong><span class="muted">{{ rosterCount }} 位</span></div><label v-if="!teamOnly && !nationalRanking">能力排名範圍<select v-model="scope"><option value="class">班級排名</option><option value="grade">年級排名</option><option value="school">全校排名</option></select></label></div>
+        <div v-if="!teamOnly && !nationalRanking && scope === 'class' && selectedClass" class="class-relay-record"><Icon name="team" :size="18" /><span>大隊接力最佳 · 1600m</span><strong class="mono">{{ classRelayBest === null ? '尚無紀錄' : timeText(classRelayBest) + 's' }}</strong></div>
         <p class="ranking-note">{{ nationalRanking ? '顯示全國百米成績前 300 名。' : teamOnly ? '依田徑隊內百米成績排序。' : '依百米個人最佳排序；尚未參賽的學生以預估 100m 成績排名。' }} 點選姓名查看完整能力。</p>
         <p class="cloud-read-status" role="status"><template v-if="cloudLoading">正在取得雲端最新資料…</template><template v-else-if="cloudError">{{ cloudError }} <button class="text-button" @click="refreshRoster">重試</button></template><template v-else-if="cloudUpdatedAt">雲端更新於 {{ cloudUpdatedAt }}</template></p>
         <div class="pagination roster-pagination"><span class="muted">{{ rosterCount ? (page - 1) * activePageSize + 1 : 0 }}–{{ Math.min(page * activePageSize, rosterCount) }} / {{ rosterCount }} 位學生</span><div><button class="btn small ghost" :disabled="page <= 1" aria-label="上一頁學生" @click="page--"><Icon name="back" :size="15" /></button><span aria-live="polite">{{ page }} <span class="muted">/ {{ pageCount }}</span></span><button class="btn small ghost" :disabled="page >= pageCount" aria-label="下一頁學生" @click="page++"><Icon name="arrow" :size="15" /></button></div></div>
@@ -193,6 +205,8 @@ watch([() => game.schoolId, () => syncState.ready], ([id, ready]) => {
 .roster-toolbar > div > span, .roster-toolbar label { font-size: 11px; }
 .roster-toolbar label { color: #a3b1a7; }
 .roster-toolbar select { padding: 8px 10px; border: 1px solid #3b4b40; border-radius: 5px; background: #17271c; color: #e4e9d8; font: inherit; }
+.class-relay-record { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; padding: 10px 12px; border: 2px solid #6a9280; border-radius: 5px; background: #e0efe0; color: #305b49; font-size: 12px; }
+.class-relay-record strong { margin-left: auto; font-size: 15px; }
 .ranking-note { color: #8f9f92; font-size: 10px; line-height: 1.9; margin: 12px 0 15px; }
 .student-table { min-width: 635px; }
 .student-table th { white-space: nowrap; }

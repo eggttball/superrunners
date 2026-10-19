@@ -99,7 +99,7 @@ function boot() {
         world.relayLineups ||= []
         world.relayChampions ||= {}
         installRelayMeet({ getStudent, canStart: () => !autoMeet.active && !windMeet.active,
-          getMeet: id => game.world.relayMeets.find(meet => meet.id === id), saveMatch: recordRelayMatch,
+          getMeet: id => game.world.relayMeets.find(meet => meet.id === id), createMeet: createSchoolRelayMeet, saveMatch: recordRelayMatch,
           saveProgress: async progress => {
             await saveLocalMetaPatch({ relayMeetProgress: progress })
             game.world.relayMeetProgress = progress
@@ -123,7 +123,7 @@ function boot() {
         game.ready = true
         game.phase = '全國資料已就緒'
         game.revision++
-        const latestRelay = world.relayMeets.slice().sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]
+        const latestRelay = world.relayMeets.filter(meet => !meet.nationalRunId).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]
         const relayProgress = world.relayMeetProgress || (latestRelay?.status === 'running'
           ? { active: true, meet: latestRelay, elapsed: -3, paused: false, speed: 1, plans: [] } : null)
         const restoredRelay = await restoreRelayMeet(relayProgress)
@@ -1054,9 +1054,12 @@ export async function createSchoolWindMeet(schoolId, { id, nationalRunId } = {})
   })
 }
 
-export async function createSchoolRelayMeet(schoolId, classIds = []) {
+export async function createSchoolRelayMeet(schoolId, classIds = [], { id, nationalRunId } = {}) {
   return transaction(async () => {
-    if (autoMeet.active || windMeet.active || relayMeet.active) throw new Error('請先完成目前的自動賽程。')
+    const nationalCurrent = nationalRunId && relayMeet.active && relayMeet.scope === 'national' && relayMeet.runId === nationalRunId
+    if (autoMeet.active || windMeet.active || (relayMeet.active && !nationalCurrent) || (nationalRunId && !nationalCurrent)) throw new Error('請先完成目前的自動賽程。')
+    const existing = id && game.world.relayMeets.find(meet => meet.id === id)
+    if (existing) return existing
     const school = getSchool(schoolId)
     if (!school) throw new Error('請先選擇學校。')
     const ids = new Set(classIds)
@@ -1065,7 +1068,7 @@ export async function createSchoolRelayMeet(schoolId, classIds = []) {
     const saved = new Map(game.world.relayLineups.map(lineup => [lineup.classId, lineup]))
     const lineups = school.classes.filter(cls => !ids.size || ids.has(cls.id))
       .map(cls => prepareRelayLineup(cls, getStudent, saved.get(cls.id)))
-    const meet = createRelayMeet(school, lineups, [...ids])
+    const meet = createRelayMeet(school, lineups, [...ids], { id, nationalRunId })
     const patch = Object.fromEntries(lineups.map(lineup => [`dynamic/relayLineups/${lineup.classId}`, lineup]))
     if (!meet.friendly) patch[`dynamic/relayMeets/${schoolId}/${meet.id}`] = meet
     await saveChanges(game.world, { relayLineups: lineups, relayMeets: meet.friendly ? [] : [meet] },

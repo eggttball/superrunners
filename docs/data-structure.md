@@ -505,4 +505,16 @@ IndexedDB v5 新增 `nationalMeets` store；資料庫名稱、世界 `schemaVers
 
 `relayChampions[schoolId]` 是現任「風速小班」：`classId`、`className`、`meetId`、`time`、`title`、`awardedAt`、`awardedAtMs`。每校最新一屆冠軍持有稱號，歷屆冠軍仍可從 `relayMeets` 查看。
 
+學校資料的班級頁從該校正式 `relayRaces.results` 中，以 `classId` 篩選後取有效 `time` 的最小值，顯示 1600m 大隊接力最佳成績；沒有正式成績時顯示「尚無紀錄」。友誼賽和輪空不納入。
+
 `meta.relayMeetProgress` 僅保存在本機，包含本屆 `meet`、`matchId`、已抽取的 `plans`、`elapsed`、`paused`、`speed`、`phase`、尚未消耗的 `pendingClock` 時間區段與日期。開賽、換場、暫停、速度變更及比賽中定期保存；重整後沿用抽取結果與最近進度，最多回退約五秒的實際經過時間，不補跑瀏覽器關閉期間。正式場次保存成功後，即使下一場進度寫入中斷，也會以已提交的場次接續。賽事完成即清除進度。友誼接力僅留下暫時畫面和本機恢復資訊，不進正式歷史或雲端；可重用的班級棒次仍可同步。
+
+### 全國風速小班選拔賽
+
+共用大隊接力控制器，依縣市、學校代碼順序逐校完成全校接力淘汰賽，每校選出唯一冠軍後接續下一校。全國模式預設 16×，單校仍為 1×；各校比賽及晉級規則、固定十六棒名單均沿用單校接力。賽程控制器獨立於頁面，切換站內頁面或背景分頁時繼續累積比賽時間。
+
+全國各校的正式 `relayMeets` 額外包含 `nationalRunId`，`id` 固定為 `${nationalRunId}-${schoolId}`，重試建立或重整時可找到同一屆比賽。完成總覽依該 runId 取得各校冠軍班級與冠軍賽總秒數，每頁 100 校，可開啟各校樹狀歷程。
+
+本機 `relayMeetProgress` 額外保存 `scope: 'national'`、`runId`、依序參賽的 `schoolIds`、`schoolIndex`（零起算目前學校）、`completedSchools`、`stage`（`school`／`nextschool`／`finished`）。切校前先保存下一校游標；重整時也核對已提交的正式賽事，已完成學校不重跑。當場仍沿用已抽取的 plans 與 pendingClock。暫停、保存失敗後重試及終止均可由畫面操作；終止會清除本機進度，保留已完成正式成績與稱號，未完成的全國校內賽事不會被當成單校賽自動續跑。全國進度不匯出 JSON，也不寫入雲端。
+
+終止狀態若無法寫入本機，控制器維持暫停的 `cancelling` 階段，顯示「重試保存終止狀態」；成功清除後才關閉控制器。此階段不再開賽，也不產生新的有效進度快照。

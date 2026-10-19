@@ -5,7 +5,7 @@ import Icon from './Icon.vue'
 import PixelRunner from './PixelRunner.vue'
 import WindTitleBadge from './WindTitleBadge.vue'
 
-const props = defineProps({ meet: { type: Object, required: true } })
+const props = defineProps({ meet: { type: Object, required: true }, backLabel: { type: String, default: '' } })
 defineEmits(['close'])
 const collapsedIds = ref(new Set())
 const selectedRoster = ref(null)
@@ -161,7 +161,7 @@ watch(() => tree.value.width, centerTree)
   <div class="relay-meet-summary">
     <header class="panel relay-summary-header">
       <div><span class="eyebrow">{{ meet.friendly ? 'FRIENDLY RELAY' : 'SCHOOL RELAY MEET' }}</span><h1>{{ school?.name || meet.schoolName || '全校' }} · 大隊接力歷程</h1><p>{{ entrants.length }} 個班級 · 每班 16 棒 · 1600 公尺</p><p class="muted">{{ meet.startedAt ? dateText(meet.startedAt) : '' }}{{ meet.startedAt ? ' · ' : '' }}{{ meet.status === 'complete' ? '賽程完成' : '賽程進行中' }} · {{ completedCount }} / {{ matches.length }} 場</p></div>
-      <button type="button" class="btn primary" @click="$emit('close')"><Icon name="back" :size="17" />{{ meet.status === 'complete' ? '回比賽選單' : '返回' }}</button>
+      <button type="button" class="btn primary" @click="$emit('close')"><Icon name="back" :size="17" />{{ backLabel || (meet.status === 'complete' ? '回比賽選單' : '返回') }}</button>
     </header>
     <section class="panel relay-tree-panel">
       <div class="section-title relay-tree-heading"><div><h2><Icon name="flag" :size="19" />{{ meet.friendly ? '班級友誼對跑' : '通往風速小班' }}</h2><p class="muted">由下往上查看各輪。每場列出所有班級、總秒數及晉級結果。</p></div><div class="relay-tree-controls"><button type="button" class="btn small" @click="expandAll">全部展開 +</button><button type="button" class="btn small" @click="collapseAll">全部收合 −</button></div></div>

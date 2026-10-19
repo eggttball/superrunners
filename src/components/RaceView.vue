@@ -19,7 +19,7 @@ import { createSchoolRelayMeet } from '../lib/game.js'
 import RelayRaceView from './RelayRaceView.vue'
 import RelayMeetSummary from './RelayMeetSummary.vue'
 import RelayTitleBadge from './RelayTitleBadge.vue'
-import { relayMeet, startRelayMeet, dismissRelayMeet } from '../lib/relay-meet.js'
+import { relayMeet, startRelayMeet, startNationalRelayMeet, dismissRelayMeet } from '../lib/relay-meet.js'
 
 const props = defineProps({ regionalOnly: Boolean, championshipOnly: Boolean })
 
@@ -297,7 +297,7 @@ function enterTeamRace() {
 }
 
 async function enterWindRace() {
-  if (startingWindMeet.value || !school.value) return
+  if (startingWindMeet.value || startingRelayMeet.value || !school.value) return
   const schoolId = selectedSchoolId.value
   const ids = [...selectedClasses.value]
   startingWindMeet.value = true
@@ -333,17 +333,30 @@ function enterAutomaticMeet() {
 }
 
 function enterNationalAutomaticMeet() {
-  if (phase.value === 'setup' && startNationalAutomaticMeet()) window.scrollTo({ top: 0, behavior: 'smooth' })
+  if (!startingRelayMeet.value && !startingWindMeet.value && phase.value === 'setup' && startNationalAutomaticMeet()) window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function enterNationalWindMeet() {
-  if (startingWindMeet.value || phase.value !== 'setup') return
+  if (startingWindMeet.value || startingRelayMeet.value || phase.value !== 'setup') return
   startingWindMeet.value = true
   try {
     await startNationalWindMeet(game.world.schools.filter(school => school.classes.some(cls => cls.studentIds.length)).sort(compareSchoolOrder))
     if (viewActive) window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (error) { notify(error.message) }
   finally { startingWindMeet.value = false }
+}
+
+async function enterNationalRelayMeet() {
+  if (startingRelayMeet.value || startingWindMeet.value || phase.value !== 'setup') return
+  startingRelayMeet.value = true
+  try {
+    const schools = game.world.schools.filter(school => school.classes.length && school.classes.every(cls => cls.studentIds.length >= 16)).sort(compareSchoolOrder)
+    dismissWindMeet()
+    dismissAutomaticMeetResult()
+    await startNationalRelayMeet(schools)
+    if (viewActive) window.scrollTo({ top: 0, behavior: 'smooth' })
+  } catch (error) { notify(error.message) }
+  finally { startingRelayMeet.value = false }
 }
 
 async function confirmTerminateNationalWindMeet() {
@@ -481,7 +494,7 @@ onUnmounted(() => { viewActive = false; historyRequest++; relayHistoryRequest++;
         </div>
       </template>
       <template v-else>
-      <GamePageHeader title="校內比賽" caption="RACE DAY" description="挑一所主場，或依序舉辦全國各校賽事。" theme="race"><div class="national-event-buttons"><button class="btn primary national-meet-button" :disabled="startingWindMeet" @click="enterNationalAutomaticMeet"><Icon name="globe" :size="20" />全國校內自動百米賽<Icon name="play" :size="17" /></button><button class="btn primary national-meet-button national-wind-button" :disabled="startingWindMeet" @click="enterNationalWindMeet"><Icon name="sprint" :size="20" />全國風速小子選拔賽<Icon name="play" :size="17" /></button></div></GamePageHeader>
+      <GamePageHeader title="校內比賽" caption="RACE DAY" description="挑一所主場，或依序舉辦全國各校賽事。" theme="race"><div class="national-event-buttons"><button class="btn primary national-meet-button" :disabled="startingWindMeet || startingRelayMeet" @click="enterNationalAutomaticMeet"><Icon name="globe" :size="20" />全國校內自動百米賽<Icon name="play" :size="17" /></button><button class="btn primary national-meet-button national-wind-button" :disabled="startingWindMeet || startingRelayMeet" @click="enterNationalWindMeet"><Icon name="sprint" :size="20" />全國風速小子選拔賽<Icon name="play" :size="17" /></button><button class="btn primary national-meet-button national-relay-button" :disabled="startingRelayMeet || startingWindMeet" @click="enterNationalRelayMeet"><Icon name="team" :size="20" />全國風速小班選拔賽<Icon name="play" :size="17" /></button></div></GamePageHeader>
       <div class="race-setup-layout">
         <SchoolPicker v-model="selectedSchoolId" />
         <div class="race-setup-detail panel">

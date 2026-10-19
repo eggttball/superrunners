@@ -1,20 +1,21 @@
 <script setup vapor>
 import { computed, ref, watch } from 'vue'
-import { game, getSchool, getClass, getStudent, timeText } from '../lib/game.js'
-import { relayMeet, toggleRelayPause, setRelaySpeed, retryRelaySave, dismissRelayMeet } from '../lib/relay-meet.js'
+import { game, getSchool, getClass, getStudent, timeText, notify } from '../lib/game.js'
+import { relayMeet, toggleRelayPause, setRelaySpeed, retryRelaySave, dismissRelayMeet, terminateNationalRelayMeet } from '../lib/relay-meet.js'
 import { relayRaceState } from '../lib/relay-physics.js'
 import Icon from './Icon.vue'
 import PixelRunner from './PixelRunner.vue'
 import RelayTrack from './RelayTrack.vue'
 import RelayMeetSummary from './RelayMeetSummary.vue'
 import RelayTitleBadge from './RelayTitleBadge.vue'
+import NationalRelaySummary from './NationalRelaySummary.vue'
 
 const emit = defineEmits(['close'])
 const selectedClassId = ref('')
 const showHistory = ref(false)
 const meet = computed(() => relayMeet.meet)
 const match = computed(() => relayMeet.match)
-const school = computed(() => getSchool(meet.value?.schoolId))
+const school = computed(() => getSchool(meet.value?.schoolId || relayMeet.schoolIds[relayMeet.schoolIndex]))
 const state = computed(() => relayRaceState(relayMeet.plans || [], Math.max(0, relayMeet.elapsed)))
 const teams = computed(() => state.value.teams)
 const waitingTeams = computed(() => {
@@ -67,6 +68,14 @@ function closeMeet() {
   dismissRelayMeet()
   emit('close')
 }
+async function terminateMeet() {
+  if (!window.confirm('確定終止全國風速小班選拔賽？已完成的接力成績與稱號會保留，剩餘賽程取消，重整後也不會續跑。')) return
+  try {
+    await terminateNationalRelayMeet()
+    emit('close')
+    notify('全國風速小班選拔已終止，已完成的成績與稱號保留。')
+  } catch (error) { notify(`比賽已停止，但終止狀態無法保存：${error.message}`) }
+}
 function runnerFor(team) {
   const plan = (relayMeet.plans || []).find(item => item.classId === team.classId)
   return plan?.legs?.[team.legIndex]?.student || getStudent(team.studentId)
@@ -85,27 +94,32 @@ function legState(legIndex) {
 
 <template>
   <section class="relay-race-view">
-    <RelayMeetSummary v-if="relayMeet.phase === 'complete' && meet" :meet="meet" @close="closeMeet" />
+    <NationalRelaySummary v-if="relayMeet.phase === 'complete' && relayMeet.scope === 'national'" :run-id="relayMeet.runId" :school-ids="relayMeet.schoolIds" @back="closeMeet" />
+    <RelayMeetSummary v-else-if="relayMeet.phase === 'complete' && meet" :meet="meet" @close="closeMeet" />
     <template v-else>
       <header class="race-header relay-race-header">
         <div>
-          <span class="eyebrow"><Icon name="team" :size="16" />{{ meet?.friendly ? '班級友誼賽' : '全校大隊接力' }}</span>
+          <span class="eyebrow"><Icon name="team" :size="16" />{{ relayMeet.scope === 'national' ? '全國風速小班選拔賽' : meet?.friendly ? '班級友誼賽' : '全校大隊接力' }}</span>
           <h1>{{ school?.name || meet?.schoolName || '大隊接力' }}<span class="heading-dot">.</span></h1>
-          <p class="muted">{{ match?.final ? '決賽' : '第 ' + (match?.round || 1) + ' 輪' }} · 第 {{ match?.number || 1 }} 組 · {{ teams.length }} 班 · {{ match?.qualifyCount ? '前 ' + match.qualifyCount + ' 班晉級' : '16 棒同心衝線' }}</p>
+          <p v-if="match" class="muted">{{ match?.final ? '決賽' : '第 ' + (match?.round || 1) + ' 輪' }} · 第 {{ match?.number || 1 }} 組 · {{ teams.length }} 班 · {{ match?.qualifyCount ? '前 ' + match.qualifyCount + ' 班晉級' : '16 棒同心衝線' }}</p>
+          <p v-else class="muted">{{ relayMeet.paused ? '賽程已暫停' : '正在準備學校接力賽' }}</p>
         </div>
         <div class="race-clock"><span>{{ phaseLabel }}</span><strong>{{ timeText(displayedTime) }}<small>s</small></strong></div>
       </header>
 
       <div class="relay-status-bar" role="status"><span><Icon name="flag" :size="16" />16 × 100m · 總程 1600m</span><span v-if="!meet?.friendly">{{ finishedMatches }} / {{ matchCount }} 場已完成 · 各組自動接續</span><span v-else>單場班級友誼賽</span></div>
+      <div v-if="relayMeet.scope === 'national'" class="relay-national-progress"><Icon name="globe" :size="17" /><strong>{{ school?.city }} · 第 {{ relayMeet.schoolIndex + 1 }} / {{ relayMeet.schoolIds.length }} 校</strong><span>{{ relayMeet.completedSchools }} 校已完成選拔</span></div>
       <div class="race-progress" role="progressbar" aria-label="領先班級接力進度" aria-valuemin="0" aria-valuemax="1600" :aria-valuenow="Math.round(leadingDistance)"><i :style="{ width: leadingDistance / 16 + '%' }"></i></div>
 
       <div class="stadium-card race-stadium relay-stadium">
         <div class="stadium-topline"><span>全場接力 <b>400m OVAL · 8 LANES</b></span><div class="race-topline-controls">
-          <button type="button" v-if="relayMeet.phase === 'countdown' || relayMeet.phase === 'running'" class="btn small" @click="toggleRelayPause"><Icon :name="relayMeet.paused ? 'play' : 'pause'" :size="16" />{{ relayMeet.paused ? '繼續' : '暫停' }}</button>
-          <button type="button" v-if="relayMeet.phase === 'saveerror'" class="btn small primary" @click="retryRelaySave">重試保存</button>
+          <button type="button" v-if="relayMeet.stage !== 'cancelling' && ['countdown', 'running', 'preparing', 'saving'].includes(relayMeet.phase)" class="btn small" @click="toggleRelayPause"><Icon :name="relayMeet.paused ? 'play' : 'pause'" :size="16" />{{ relayMeet.paused ? '繼續' : '暫停' }}</button>
+          <button type="button" v-if="relayMeet.phase === 'saveerror'" class="btn small primary" @click="retryRelaySave">{{ relayMeet.stage === 'cancelling' ? '重試保存終止狀態' : '重試保存' }}</button>
+          <button type="button" v-if="relayMeet.scope === 'national' && relayMeet.active && relayMeet.stage !== 'cancelling'" class="btn small terminate-national-meet" @click="terminateMeet"><Icon name="close" :size="15" />終止全國選拔</button>
           <button type="button" v-for="rate in [1, 2, 4, 8, 16]" :key="rate" class="speed-button" :class="{ active: relayMeet.speed === rate }" :aria-pressed="relayMeet.speed === rate" @click="setRelaySpeed(rate)">{{ rate }}×</button>
         </div></div>
-        <RelayTrack :runners="state.runners" :waiting-teams="waitingTeams" :animated="relayMeet.phase === 'running' && !relayMeet.paused" :paused="relayMeet.paused && relayMeet.phase === 'running'" :playback-rate="relayMeet.speed" :wheel-zoom="false" />
+        <RelayTrack v-if="match" :runners="state.runners" :waiting-teams="waitingTeams" :animated="relayMeet.phase === 'running' && !relayMeet.paused" :paused="relayMeet.paused && relayMeet.phase === 'running'" :playback-rate="relayMeet.speed" :wheel-zoom="false" />
+        <div v-else class="empty-state">{{ relayMeet.phase === 'saveerror' ? '賽程準備失敗，請按重試保存。' : '正在準備下一所學校…' }}</div>
         <div v-if="relayMeet.phase === 'countdown' && !relayMeet.paused" class="countdown-overlay"><span>ONE TEAM · ONE BATON</span><strong :key="countdown">{{ countdown }}</strong></div>
         <div v-if="relayMeet.paused && (relayMeet.phase === 'countdown' || relayMeet.phase === 'running')" class="pause-overlay">PAUSED<span>接力已暫停 · 按繼續開跑</span></div>
       </div>
@@ -146,6 +160,8 @@ function legState(legIndex) {
 .relay-race-header .eyebrow { display: inline-flex; align-items: center; gap: 6px; }
 .relay-status-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 13px; color: #557069; font-size: 12px; }
 .relay-status-bar span { display: inline-flex; align-items: center; gap: 6px; }
+.relay-national-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border: 2px solid #315f59; border-radius: 5px; background: #d5edcf; color: #315f59; font-size: 12px; }
+.relay-national-progress span { margin-left: auto; }
 .relay-stadium { margin-bottom: 20px; }
 .relay-stadium .stadium-topline { flex-wrap: wrap; }
 .relay-team-cards { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }

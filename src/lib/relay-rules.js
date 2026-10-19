@@ -96,7 +96,7 @@ function advanceRounds(meet, finishedAt) {
 }
 
 /** Snapshot all rosters once; future rounds refer only to this fixed edition. */
-export function createRelayMeet(school, lineups, classIds = []) {
+export function createRelayMeet(school, lineups, classIds = [], { id: suppliedId, nationalRunId } = {}) {
   const friendly = classIds.length > 0
   const selected = new Set(classIds)
   if (friendly && (selected.size !== classIds.length || classIds.length < 2 || classIds.length > 8)) {
@@ -115,8 +115,9 @@ export function createRelayMeet(school, lineups, classIds = []) {
   }).sort(classOrder)
   if (!entrants.length) throw new Error('這所學校目前沒有可參賽的班級。')
   const startedAt = new Date().toISOString()
-  const id = `relay-${crypto.randomUUID()}`
+  const id = suppliedId || `relay-${crypto.randomUUID()}`
   const meet = { id, kind: 'relay', schoolId: school.id, schoolName: school.name, friendly,
+    ...(nationalRunId ? { nationalRunId } : {}),
     classIds: entrants.map(entry => entry.classId), entrants,
     rounds: [createRound(id, 1, entrants, [], friendly)], startedAt, finishedAt: null,
     status: 'running', completedMatches: 0, champion: null }
