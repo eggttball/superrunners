@@ -171,9 +171,9 @@ function receivingLane(plan, exchange, plans, elapsed) {
   const before = exchange.queueOrder?.slice(0, position) || []
   for (const classId of before) {
     const other = plans.find(plan => plan.classId === classId)?.exchanges[exchange.index]
-    // Once a recipient accelerates its assigned corridor stays fixed. The
-    // waiting queue behind it can still slide after each successful transfer.
-    if (other) position -= smooth((Math.min(elapsed, exchange.preRunStart) - other.time) / 0.8)
+    // Release the staging slot when the receiver starts accelerating, so the
+    // next team fills inward as soon as that runner leaves the queue.
+    if (other) position -= smooth((Math.min(elapsed, exchange.preRunStart) - other.preRunStart) / 0.8)
   }
   return 1 + clamp(position, 0, 7) * 0.9
 }
