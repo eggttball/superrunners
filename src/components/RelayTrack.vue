@@ -36,19 +36,26 @@ const waitingZones = [
 ]
 const waitingGroups = computed(() => {
   const stations = waitingZones.map(zone => ({ ...zone, athletes: [] }))
+  const onTrack = new Set(props.runners.map(runner => runner.studentId))
   for (const team of props.waitingTeams) {
-    for (const athlete of team.athletes) {
-      // The second runner receives at 100m; later legs cycle through the
-      // four exchange locations around the oval.
-      const zoneIndex = (athlete.legIndex - 1 + waitingZones.length) % waitingZones.length
-      stations[zoneIndex].athletes.push({ ...athlete, classId: team.classId, className: team.className, color: team.color })
+    const teamStations = waitingZones.map(() => [])
+    for (const athlete of team.athletes.slice().sort((first, second) => first.legIndex - second.legIndex)) {
+      // Hide the infield sprite as soon as the same athlete appears in the
+      // track runner list, including the early receiving/pre-run phase.
+      if (onTrack.has(athlete.student.id)) continue
+      // Relay station labels follow baton number: 2, 6, 10 and 14 wait at 200m.
+      const zoneIndex = athlete.legIndex % waitingZones.length
+      teamStations[zoneIndex].push({ ...athlete, classId: team.classId, className: team.className, color: team.color })
+    }
+    for (const [zoneIndex, athletes] of teamStations.entries()) {
+      if (!athletes.length) continue
+      stations[zoneIndex].athletes.push({ classId: team.classId, className: team.className, color: team.color, athletes })
     }
   }
-  return stations.map(station => ({ ...station,
-    athletes: station.athletes.map((athlete, index) => ({ ...athlete,
-      position: `translate(${index % 8 * 3.7} ${2 + Math.floor(index / 8) * 3.9})`,
-    })),
-  }))
+  return stations.map(station => ({ ...station, athletes: station.athletes.flatMap((team, teamIndex) =>
+    team.athletes.map((athlete, legPosition) => ({ ...athlete,
+      position: `translate(${teamIndex * 3.7} ${2 + legPosition * 3.9})`,
+    }))) }))
 })
 const trees = [
   [-49, -23, 1.05], [-49, 13, .8], [-31, -47, 1], [8, -53, .9],

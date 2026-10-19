@@ -18,10 +18,9 @@ const school = computed(() => getSchool(meet.value?.schoolId))
 const state = computed(() => relayRaceState(relayMeet.plans || [], Math.max(0, relayMeet.elapsed)))
 const teams = computed(() => state.value.teams)
 const waitingTeams = computed(() => {
-  const onTrack = new Set(state.value.runners.map(runner => runner.studentId))
   const byClass = new Map(teams.value.map(team => [team.classId, team]))
   return relayMeet.plans.map(plan => ({ classId: plan.classId, className: plan.className, color: plan.color,
-    athletes: plan.legs.filter(leg => leg.index > (byClass.get(plan.classId)?.legIndex ?? 0) && !onTrack.has(leg.studentId))
+    athletes: plan.legs.filter(leg => leg.index > (byClass.get(plan.classId)?.legIndex ?? 0))
       .map(leg => ({ student: leg.student, legIndex: leg.index })) }))
 })
 const classBests = computed(() => {
