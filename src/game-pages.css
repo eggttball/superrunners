@@ -180,7 +180,9 @@
 .interior-shell .national-meet-button:hover:not(:disabled) { background: #ffc58e; }
 .interior-shell .national-relay-button { background: #79c7b3; border-color: #315f59; box-shadow: 0 4px 0 #315f59, inset 0 3px 0 #ffffff50; }
 .interior-shell .national-relay-button:hover:not(:disabled) { background: #a0dfc8; }
-.national-event-buttons { display: flex; flex-direction: column; gap: 12px; }
+.race-view .page-hero-extra { min-width: 0; flex: 1 1 620px; }
+.national-event-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 760px; }
+.national-event-buttons .national-meet-button { width: 100%; min-width: 0; justify-content: center; gap: 6px; padding-inline: 10px; text-align: center; }
 .interior-shell .national-wind-button { background: #ffd071; }
 .interior-shell .national-wind-button:hover:not(:disabled) { background: #ffe39f; }
 .national-wind-summary { padding: 18px 22px; }
@@ -456,7 +458,8 @@
   .page-hero-copy .eyebrow { font-size: 9px; }
   .page-hero-extra { width: 100%; margin: 0; padding-top: 10px; border-top: 1px dashed #263c5940; }
   .page-hero-extra .badge { font-size: 10px; }
-  .national-meet-button { width: 100%; justify-content: center; }
+  .national-event-buttons { gap: 6px; }
+  .national-event-buttons .national-meet-button { gap: 3px; padding: 8px 4px; font-size: 10px; }
   .national-meet-status { font-size: 11px; }
   .interior-shell .school-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .interior-shell .stat-card strong { font-size: 28px; }
