@@ -115,7 +115,7 @@ function legState(legIndex) {
       <div class="relay-team-cards" aria-label="各班即時接力成績">
         <button type="button" v-for="team in teamDetails" :key="team.classId" class="relay-team-card" :class="{ selected: selectedTeam?.classId === team.classId, finished: team.finished }" :style="{ '--team-color': team.color }" :aria-pressed="selectedTeam?.classId === team.classId" @click="selectedClassId = team.classId">
           <div class="relay-team-card-top"><span class="lane-label">{{ team.finished ? '已完賽' : '目前跑道' }} <b v-if="team.currentLane">{{ team.currentLane }}</b></span><span v-if="team.showPlace && team.place" class="live-rank" :class="rankClass(team.place)">{{ team.finished ? '完賽' : '目前' }}第 {{ team.place }} 名</span></div>
-          <div class="relay-team-portrait"><PixelRunner :seed="String(team.studentId || team.classId)" :gender="runnerFor(team)?.gender" :height="runnerFor(team)?.height" :weight="runnerFor(team)?.weight" :color="team.color" :size="45" /><span>{{ team.finished ? 'FINISH' : '第 ' + (team.legIndex + 1) + ' 棒' }}</span></div>
+          <div class="relay-team-portrait"><PixelRunner :seed="String(team.studentId || team.classId)" :gender="runnerFor(team)?.gender" :height="runnerFor(team)?.height" :weight="runnerFor(team)?.weight" :color="team.color" :size="32" /><span>{{ team.finished ? 'FINISH' : '第 ' + (team.legIndex + 1) + ' 棒' }}</span></div>
           <strong>{{ className(team) }}<RelayTitleBadge :class-id="team.classId" compact /></strong>
           <div class="relay-runner-details">
             <div><span>{{ team.finished ? '末棒跑者' : '目前持棒' }}<em v-if="team.exchange && !team.finished">交棒中</em></span><strong>{{ team.currentRunner?.name || '接力跑者' }}</strong><small>百米最佳 <b class="mono">{{ personalBest(team.currentRunner) }}</b></small></div>
@@ -149,31 +149,34 @@ function legState(legIndex) {
 .relay-status-bar span { display: inline-flex; align-items: center; gap: 6px; }
 .relay-stadium { margin-bottom: 20px; }
 .relay-stadium .stadium-topline { flex-wrap: wrap; }
-.relay-team-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
-.relay-team-card { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 7px; padding: 12px; border: 2px solid #263c59; border-top: 6px solid var(--team-color, #a5c983); border-radius: 6px; background: #fff9e8; color: #263c59; box-shadow: 2px 3px 0 #263c5938; text-align: left; cursor: pointer; }
+.relay-team-cards { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
+.relay-team-card { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 7px; border: 1.5px solid #263c59; border-top: 4px solid var(--team-color, #a5c983); border-radius: 5px; background: #fff9e8; color: #263c59; box-shadow: 1px 2px 0 #263c5938; text-align: left; cursor: pointer; }
 .relay-team-card:hover, .relay-team-card.selected { background: #fff0bd; }
 .relay-team-card.selected { outline: 2px solid #d7843f; outline-offset: 2px; }
 .relay-team-card.finished { background: #eef3d9; }
-.relay-team-card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.relay-team-card-top .live-rank { margin: 0; font-size: 10px; }
-.relay-team-portrait { display: flex; align-items: center; gap: 10px; }
-.relay-team-portrait > span { font: 700 17px var(--mono, monospace); color: #a75132; }
-.relay-team-card > strong { display: flex; align-items: center; gap: 6px; font-size: 14px; }
-.relay-team-card > small { color: #637879; font-size: 11px; }
+.relay-team-card-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 3px; }
+.relay-team-card-top .lane-label { font-size: 9px; }
+.relay-team-card-top .live-rank { margin: 0; padding: 2px 4px; font-size: 9px; }
+.relay-team-portrait { display: flex; align-items: center; gap: 4px; }
+.relay-team-portrait :deep(.pixel-runner) { flex: 0 0 32px; }
+.relay-team-portrait > span { font: 700 12px var(--mono, monospace); color: #a75132; }
+.relay-team-card > strong { min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; font-size: 11px; white-space: nowrap; }
+.relay-team-card > strong :deep(.relay-title-badge) { flex-shrink: 0; }
+.relay-team-card > small { color: #637879; font-size: 9px; }
 .relay-team-card em { margin-left: 7px; padding: 2px 5px; background: #ffd875; color: #854625; border-radius: 3px; font-size: 10px; font-style: normal; font-weight: 800; }
-.relay-runner-details { display: grid; gap: 8px; }
-.relay-runner-details > div { display: grid; gap: 4px; }
-.relay-runner-details span, .relay-runner-details small { font-size: 11px; color: #637879; }
-.relay-runner-details strong { font-size: 14px; }
+.relay-runner-details { display: grid; gap: 4px; }
+.relay-runner-details > div { min-width: 0; display: grid; gap: 2px; }
+.relay-runner-details span, .relay-runner-details small { overflow: hidden; font-size: 9px; color: #637879; text-overflow: ellipsis; white-space: nowrap; }
+.relay-runner-details strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .relay-runner-details small b { color: #263c59; }
-.relay-next-runner { padding-top: 8px; border-top: 1px dashed #c5c8ac; min-height: 52px; }
-.relay-class-best { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px; padding: 7px 8px; background: #f0e7c9; border-radius: 4px; font-size: 11px; }
+.relay-next-runner { min-width: 0; padding-top: 4px; border-top: 1px dashed #c5c8ac; min-height: 0; }
+.relay-class-best { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 2px; padding: 4px; background: #f0e7c9; border-radius: 4px; font-size: 9px; }
 .relay-class-best b { color: #87532c; }
 .relay-team-progress { height: 5px; overflow: hidden; background: #d8e4d0; border-radius: 2px; }
 .relay-team-progress i { display: block; height: 100%; background: #da785b; }
-.relay-team-distance { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; }
-.relay-team-distance small { color: #7b8b80; font-size: 10px; }
-.relay-team-distance b { color: #29735c; font-size: 16px; }
+.relay-team-distance { display: flex; justify-content: space-between; gap: 3px; font-size: 9px; }
+.relay-team-distance small { color: #7b8b80; font-size: 8px; }
+.relay-team-distance b { color: #29735c; font-size: 12px; }
 .relay-lineup-panel { padding: 16px 18px 18px; }
 .relay-lineup-panel .section-title { margin-top: 0; gap: 10px; }
 .relay-lineup-panel h2 { margin: 5px 0 0; font-size: 18px; }
@@ -194,6 +197,7 @@ function legState(legIndex) {
 .relay-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 16px 0; }
 .relay-footer .data-note { margin: 0; }
 .relay-footer .btn { flex-shrink: 0; }
+@media (max-width: 1100px) { .relay-team-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 850px) { .relay-team-cards, .relay-lineup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .relay-team-cards { gap: 8px; } .relay-team-card { padding: 9px; } .relay-team-card-top { flex-wrap: wrap; } .relay-team-portrait { gap: 6px; } .relay-team-portrait > span { font-size: 14px; } .relay-team-card > strong { font-size: 12px; } .relay-team-distance { flex-wrap: wrap; } .relay-lineup-panel { padding: 12px; } .relay-lineup-panel .section-title { flex-wrap: wrap; } .relay-lineup-panel h2 { font-size: 15px; } .relay-lineup-athlete { gap: 4px; } .relay-lineup-athlete :deep(.pixel-runner) { width: 28px; height: 28px; } .relay-footer { flex-wrap: wrap; } }
 </style>
