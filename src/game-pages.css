@@ -210,7 +210,9 @@
 .interior-shell .event-card { background: #ffdc61; color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; box-shadow: 0 4px 0 var(--ink), inset 0 3px 0 #ffffff70; }
 .interior-shell .event-card:hover:not(:disabled) { background: #ffe68a; transform: translateY(-2px); }
 .interior-shell .event-card:disabled { opacity: 1; box-shadow: none; background: #e9eade; border-color: #a3adab; color: #657876; }
-.interior-shell .event-card.relay { background: #e7eae3; border-style: dashed; }
+.interior-shell .event-card.relay { background: #78cbb5; color: #173e39; border-color: #24695e; border-style: solid; opacity: 1; box-shadow: 0 4px 0 #24695e, inset 0 3px 0 #ffffff55; }
+.interior-shell .event-card.relay:hover:not(:disabled) { background: #8bd9c2; }
+.interior-shell .event-card.relay:disabled { background: #e9eade; border-color: #a3adab; color: #657876; box-shadow: none; }
 .interior-shell .event-card.automatic { background: #df8a5f; color: #fff9e8; border-color: #6d3941; box-shadow: 0 4px 0 #6d3941, inset 0 3px 0 #ffffff35; }
 .interior-shell .event-card.automatic:hover:not(:disabled) { background: #ef9e70; }
 .interior-shell .race-hint { color: #4d6c74; background: #eaf0e3; padding: 15px; margin-top: 22px; border-radius: 5px; }
