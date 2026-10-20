@@ -70,7 +70,7 @@ function legProfile(sprint, student, distance, incoming, outgoing) {
   knots.at(-1).distance = distance
   return { time, distance, accelerationDuration: acceleration, fatigueStart, fatigueLoss,
     peakSpeed, initialSpeed: knots[0].speed, finishSpeed: knots.at(-1).speed,
-    runoutDuration: sprint.runoutDuration, knots, sourceSprint: { ...sprint } }
+    runoutDuration: sprint.runoutDuration, knots }
 }
 
 function profileState(profile, elapsed) {
@@ -111,7 +111,7 @@ export function createRelayRace(match, meet, getStudent, random = Math.random) {
     const students = entrant.studentIds.map(id => {
       const student = getStudent(id)
       if (!student || student.classId !== classId || student.schoolId !== meet.schoolId) throw new Error('接力學生與班級快照不符。')
-      return structuredClone(student)
+      return student
     })
     const sprints = students.map(student => createSprintProfile(student, safeRandom))
     const exchanges = students.slice(0, -1).map((student, index) => exchangePlan(student, students[index + 1], sprints[index], sprints[index + 1], index))
@@ -122,7 +122,7 @@ export function createRelayRace(match, meet, getStudent, random = Math.random) {
       const startDistance = incoming?.distance || 0
       const endDistance = outgoing?.distance || RELAY_DISTANCE
       const profile = legProfile(sprints[index], students[index], endDistance - startDistance, incoming, outgoing)
-      const leg = { studentId: students[index].id, index, student: students[index],
+      const leg = { studentId: students[index].id, index,
         startTime, endTime: startTime + profile.time, startDistance, endDistance, profile,
         incomingExchange: incoming ? index - 1 : null, outgoingExchange: outgoing ? index : null }
       legs.push(leg)

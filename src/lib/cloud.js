@@ -4,6 +4,7 @@ import { databaseURL } from './firebase.js'
 import { pendingOperations } from './storage.js'
 import { CLOUD_SCHEMA, cloudRacePath, emptyDynamicStudent, flagIds, idFlags, normalizeRelayData, normalizeRelayMeet, normalizeRelayRace, putScores, schoolUpload, sortedScores, staticMetadata, values, worldIdentity } from './cloud-schema.js'
 import { normalizeRegion } from './regional-selection.js'
+import { compactRelayHistory, compactRelayProgress } from './relay-data.js'
 
 export const syncState = shallowReactive({ ready: false, busy: false, pending: 0, error: '', phase: '', progress: 0 })
 let context, drain, retryTimer, mergeLocal, currentWorld, lookupStudent
@@ -211,6 +212,8 @@ export async function restoreCloud(onProgress) {
     const student = byId.get(result.studentId)
     if (student) student.best100 = student.best100 == null ? result.time : Math.min(student.best100, result.time)
   }
+  compactRelayHistory(world)
+  compactRelayProgress(world.relayMeetProgress)
   return world
 }
 

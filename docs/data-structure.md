@@ -90,7 +90,9 @@ erDiagram
   STUDENTS ||--o{ AWARDS : receives
 ```
 
-資料以 ID 連結，沒有巢狀複製整位學生資料。例外是 `races.results` 會保存學生姓名、學號、班級等當時快照，確保日後更改綽號或隊籍後，舊賽事紀錄仍保有當次資料。
+資料以 ID 連結，避免巢狀複製整位學生資料。百米 `races.results` 會保存姓名、學號、班級等當時快照；接力名單則以學生 ID 為主，另外保存分段時間與交棒資料。
+
+載入大量全國資料時，Worker 與頁面以有確認回覆的區塊傳送資料，不會把整個世界放進單一 `postMessage`。舊版接力歷程會在載入時就地移除重複的學生快照；成績、名次、棒次 ID、分段及交棒資料都會保留並回存本機。接力進度也只保留重播所需的速度節點，不重複保存學生資料及來源曲線。
 
 ## 世界中繼資料
 
@@ -501,13 +503,13 @@ IndexedDB v5 新增 `nationalMeets` store；資料庫名稱、世界 `schemaVers
 
 `relayMeets` 保存 `schoolId`、`schoolName`、`classIds`、`entrants`、`rounds`、`completedMatches`、`status`、`startedAt`、`finishedAt`、`champion`。各參賽班級的 `entrants.studentIds` 為本屆固定棒次。每輪 `matches` 包含 `classIds`、`sourceMatchIds`、`qualifyCount`、`qualifiedClassIds`、`results` 和 `status`；來源場次連結保留多隊晉級的完整歷程。單班輪空不產生秒數。
 
-`relayRaces` 每一場一筆，以場次 ID 作為 `id`，包含 `mode: 'relay'`、`meetId`、`relayMatchId`、`schoolId`、`round`、`number`、`startedAt`、`finishedAt`。`results` 的每班資料含 `classId`、`className`、`color`、`lane`、`time`（團隊總秒數）、`place`、`qualified`、`studentIds`、`lineup`（十六人當時個資快照）、`splits`、`exchanges`。分段只描述接力，不更新個人百米最佳、個人排名或百米獎牌。
+`relayRaces` 每一場一筆，以場次 ID 作為 `id`，包含 `mode: 'relay'`、`meetId`、`relayMatchId`、`schoolId`、`round`、`number`、`startedAt`、`finishedAt`。`results` 的每班資料含 `classId`、`className`、`color`、`lane`、`time`（團隊總秒數）、`place`、`qualified`、`studentIds`、`lineup`（學生 ID、姓名、班級、學校與棒次）、`splits`、`exchanges`。個人詳細資料由學生 ID 查詢，舊快照會在載入時精簡。分段只描述接力，不更新個人百米最佳、個人排名或百米獎牌。
 
 `relayChampions[schoolId]` 是現任「風速小班」：`classId`、`className`、`meetId`、`time`、`title`、`awardedAt`、`awardedAtMs`。每校最新一屆冠軍持有稱號，歷屆冠軍仍可從 `relayMeets` 查看。
 
 學校資料的班級頁從該校正式 `relayRaces.results` 中，以 `classId` 篩選後取有效 `time` 的最小值，顯示 1600m 大隊接力最佳成績；沒有正式成績時顯示「尚無紀錄」。友誼賽和輪空不納入。
 
-`meta.relayMeetProgress` 僅保存在本機，包含本屆 `meet`、`matchId`、已抽取的 `plans`、`elapsed`、`paused`、`speed`、`phase`、尚未消耗的 `pendingClock` 時間區段與日期。開賽、換場、暫停、速度變更及比賽中定期保存；重整後沿用抽取結果與最近進度，最多回退約五秒的實際經過時間，不補跑瀏覽器關閉期間。正式場次保存成功後，即使下一場進度寫入中斷，也會以已提交的場次接續。賽事完成即清除進度。友誼接力僅留下暫時畫面和本機恢復資訊，不進正式歷史或雲端；可重用的班級棒次仍可同步。
+`meta.relayMeetProgress` 僅保存在本機，包含本屆 `meet`、`matchId`、已抽取的 `plans`、`elapsed`、`paused`、`speed`、`phase`、尚未消耗的 `pendingClock` 時間區段與日期。plans 保存比賽使用的速度節點，以維持重整後的同一組賽果；不保存重複的學生完整資料或來源衝刺曲線。開賽、換場、暫停、速度變更及比賽中定期保存；重整後沿用抽取結果與最近進度，最多回退約五秒的實際經過時間，不補跑瀏覽器關閉期間。正式場次保存成功後，即使下一場進度寫入中斷，也會以已提交的場次接續。賽事完成即清除進度。友誼接力僅留下暫時畫面和本機恢復資訊，不進正式歷史或雲端；可重用的班級棒次仍可同步。
 
 ### 全國風速小班選拔賽
 

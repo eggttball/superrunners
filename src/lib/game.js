@@ -1,5 +1,5 @@
 import { reactive, shallowReactive } from 'vue'
-import { saveChanges, saveLocalMetaPatch, requestPersistentStorage, exportWorld, pendingOperations } from './storage.js'
+import { saveChanges, saveLocalMetaPatch, requestPersistentStorage, exportWorld, pendingOperations, metadata, TABLES } from './storage.js'
 import { cloudOperation, installCloudSync, queueSync, restoreCloud, retryCloudSync, reserveStudentSeat, releaseStudentSeat } from './cloud.js'
 import { flagIds } from './cloud-schema.js'
 import { rankStudents } from './generator.js'
@@ -14,6 +14,7 @@ import { installWindMeet, restoreWindMeet, restoreNationalWindMeet, windMeet } f
 import { admissionDetails, buildAdmittedStudent, validateStudentInput } from './student-admission.js'
 import { prepareRelayLineup, createRelayMeet, completeRelayMatch } from './relay-rules.js'
 import { relayMeet, installRelayMeet, restoreRelayMeet } from './relay-meet.js'
+import { compactRelayHistory } from './relay-data.js'
 
 export const game = shallowReactive({
   world: null, ready: false, progress: 0, phase: '準備你的田徑世界', error: '',
@@ -61,11 +62,49 @@ function boot() {
   return new Promise(resolve => {
     void requestPersistentStorage()
     const worker = new Worker(new URL('./world.worker.js', import.meta.url), { type: 'module' })
+    let loadingWorld = null
+    let nextRestoreChunkId = 0
+    const restoreAcks = new Map()
+    const streamRestoredWorld = async world => {
+      worker.postMessage({ type: 'restore-start', meta: metadata(world) })
+      const batchSize = 2000
+      for (const table of TABLES) {
+        const records = world[table] || []
+        for (let offset = 0; offset < records.length; offset += batchSize) {
+          const id = ++nextRestoreChunkId
+          const end = Math.min(offset + batchSize, records.length)
+          const acknowledged = new Promise((resolveAck, rejectAck) => restoreAcks.set(id, { resolve: resolveAck, reject: rejectAck }))
+          worker.postMessage({ type: 'restore-chunk', id, table, records: records.slice(offset, end) })
+          await acknowledged
+          for (let index = offset; index < end; index++) records[index] = null
+        }
+        world[table] = []
+      }
+      worker.postMessage({ type: 'restore-end' })
+    }
     worker.onmessage = async event => {
       const data = event.data
+      if (data.type === 'restore-ack') {
+        restoreAcks.get(data.id)?.resolve()
+        restoreAcks.delete(data.id)
+      }
       if (data.type === 'progress') {
         game.phase = data.phase
         game.progress = Math.min(100, Math.round(data.progress <= 1 ? data.progress * 100 : data.progress))
+      }
+      if (data.type === 'world-start') {
+        loadingWorld = { ...data.meta }
+        for (const table of data.tables) loadingWorld[table] = []
+      }
+      if (data.type === 'world-chunk') {
+        if (!loadingWorld || !TABLES.includes(data.table) || !Array.isArray(data.records)) {
+          game.error = '本機資料區塊無法識別，請重新載入。'
+          worker.terminate()
+          resolve()
+          return
+        }
+        loadingWorld[data.table].push(...data.records)
+        worker.postMessage({ type: 'world-ack', id: data.id })
       }
       if (data.type === 'missing') {
         try {
@@ -73,7 +112,7 @@ function boot() {
             game.phase = progress.phase
             game.progress = Math.round(progress.progress * 100)
           })
-          worker.postMessage({ type: 'restore', world })
+          await streamRestoredWorld(world)
         } catch (error) {
           game.error = error.message
           worker.terminate()
@@ -81,7 +120,14 @@ function boot() {
         }
       }
       if (data.type === 'ready') {
-        const world = data.world
+        const world = loadingWorld
+        loadingWorld = null
+        if (!world) {
+          game.error = '本機資料傳輸未完成，請重新載入。'
+          worker.terminate()
+          resolve()
+          return
+        }
         worker.terminate()
         // Populate directly to avoid a temporary array of hundreds of thousands of pairs.
         students = new Map()
@@ -141,13 +187,17 @@ function boot() {
         resolve()
       }
       if (data.type === 'error') {
+        for (const pending of restoreAcks.values()) pending.reject(new Error(data.message))
+        restoreAcks.clear()
         game.error = data.message
         worker.terminate()
+        loadingWorld = null
         resolve()
       }
     }
     worker.onerror = event => {
       game.error = event.message || '資料初始化無法完成，請重新載入。'
+      loadingWorld = null
       worker.terminate()
       resolve()
     }
@@ -468,6 +518,8 @@ async function mergeCloudData(update) {
     const syncedRelayRace = savedRelayRace?.syncStatus === 'pending'
       ? { ...(update.relayRaces || []).find(race => race.id === savedRelayRace.id) || savedRelayRace } : null
     if (syncedRelayRace) delete syncedRelayRace.syncStatus
+    compactRelayHistory({ relayMeets: changedRelayMeets,
+      relayRaces: [...newRelayRaces, ...(syncedRelayRace ? [syncedRelayRace] : [])] })
     const nationalHonors = { ...game.world.nationalHonors }
     for (const [id, honors] of Object.entries(update.nationalHonors || {})) {
       nationalHonors[id] = [...new Map([...(nationalHonors[id] || []), ...honors].map(honor => [honor.meetId, honor])).values()]
@@ -1091,9 +1143,13 @@ async function recordRelayMatch(meet, match, results, startedAt, finishedAt) {
     if (game.world.relayRaces.some(race => race.id === match.id)) return saved
     const next = completeRelayMatch(saved, match.id, results, finishedAt)
     const officialResults = next.rounds.flatMap(round => round.matches).find(value => value.id === match.id).results
+    const detailedResults = new Map(results.map(result => [result.classId, result]))
     const race = { id: match.id, mode: 'relay', meetId: meet.id, relayMatchId: match.id,
       schoolId: meet.schoolId, round: match.round, number: match.number,
-      startedAt, finishedAt, results: officialResults, syncStatus: 'pending' }
+      startedAt, finishedAt, results: officialResults.map(result => {
+        const details = detailedResults.get(result.classId)
+        return { ...details, ...result, studentIds: [...(details?.studentIds || [])] }
+      }), syncStatus: 'pending' }
     const champion = next.status === 'complete' && next.champion ? {
       schoolId: meet.schoolId, classId: next.champion.classId, className: next.champion.className,
       meetId: meet.id, time: next.champion.time, title: '風速小班',

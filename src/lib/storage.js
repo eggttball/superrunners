@@ -1,6 +1,6 @@
 const DATABASE = 'superrunners-taiwan-v3'
 const LEGACY_DATABASES = ['superrunners-taiwan-v1', 'superrunners-taiwan-v2']
-const TABLES = ['schools', 'students', 'teams', 'races', 'awards', 'windMeets', 'regionMeets', 'nationalMeets', 'relayMeets', 'relayRaces', 'relayLineups']
+export const TABLES = ['schools', 'students', 'teams', 'races', 'awards', 'windMeets', 'regionMeets', 'nationalMeets', 'relayMeets', 'relayRaces', 'relayLineups']
 let connection
 let legacyCleanup
 

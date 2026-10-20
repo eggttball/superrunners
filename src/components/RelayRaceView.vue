@@ -22,7 +22,7 @@ const waitingTeams = computed(() => {
   const byClass = new Map(teams.value.map(team => [team.classId, team]))
   return relayMeet.plans.map(plan => ({ classId: plan.classId, className: plan.className, color: plan.color,
     athletes: plan.legs.filter(leg => leg.index > (byClass.get(plan.classId)?.legIndex ?? 0))
-      .map(leg => ({ student: leg.student, legIndex: leg.index })) }))
+      .map(leg => ({ student: getStudent(leg.studentId), legIndex: leg.index })).filter(leg => leg.student) }))
 })
 const classBests = computed(() => {
   game.revision
@@ -37,8 +37,8 @@ const classBests = computed(() => {
 })
 const teamDetails = computed(() => teams.value.map(team => {
   const plan = relayMeet.plans.find(item => item.classId === team.classId)
-  const currentRunner = plan?.legs?.[team.legIndex]?.student || getStudent(team.studentId)
-  const nextRunner = !team.finished && plan?.legs?.[team.legIndex + 1]?.student
+  const currentRunner = getStudent(plan?.legs?.[team.legIndex]?.studentId || team.studentId)
+  const nextRunner = !team.finished && getStudent(plan?.legs?.[team.legIndex + 1]?.studentId)
   const holder = state.value.runners.find(runner => runner.classId === team.classId && runner.baton && runner.role === 'active')
   return { ...team, currentRunner, nextRunner,
     showPlace: team.distance >= 352,
@@ -54,7 +54,7 @@ const selectedPlan = computed(() => (relayMeet.plans || []).find(plan => plan.cl
 const selectedLineup = computed(() => {
   game.revision
   return (selectedEntrant.value?.studentIds || []).map((id, legIndex) => ({
-    id, legIndex, student: selectedPlan.value?.legs?.[legIndex]?.student || getStudent(id),
+    id, legIndex, student: getStudent(selectedPlan.value?.legs?.[legIndex]?.studentId || id),
   }))
 })
 const countdown = computed(() => Math.max(1, Math.ceil(-relayMeet.elapsed)))
@@ -78,7 +78,7 @@ async function terminateMeet() {
 }
 function runnerFor(team) {
   const plan = (relayMeet.plans || []).find(item => item.classId === team.classId)
-  return plan?.legs?.[team.legIndex]?.student || getStudent(team.studentId)
+  return getStudent(plan?.legs?.[team.legIndex]?.studentId || team.studentId)
 }
 function className(team) { return team.className || getClass(team.classId)?.name || '班級' }
 function rankClass(place) { return ['rank-first', 'rank-second', 'rank-third'][place - 1] || '' }

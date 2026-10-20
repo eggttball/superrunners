@@ -3,6 +3,7 @@ import { nextRelayMatch, completeRelayMatch } from './relay-rules.js'
 import { createRelayRace } from './relay-physics.js'
 import { createMeetClock } from './meet-clock.js'
 import { setMusicMode, playCountdown, playStartWhistle } from './audio.js'
+import { relayLineupSnapshot } from './relay-data.js'
 
 export const relayMeet = shallowReactive({ active: false, meet: null, match: null, plans: [],
   scope: 'school', runId: '', schoolIds: [], schoolIndex: 0, completedSchools: 0, stage: 'school',
@@ -226,7 +227,7 @@ async function saveMatch(at, token) {
   const finishedAt = relayMeet.finishedAt || new Date(at).toISOString()
   const results = relayMeet.plans.map(plan => ({ classId: plan.classId, className: plan.className,
     color: plan.color, lane: plan.lane, time: plan.totalTime, studentIds: [...plan.studentIds],
-    lineup: plan.legs.map(leg => ({ ...leg.student, leg: leg.index + 1 })),
+    lineup: plan.legs.map(leg => relayLineupSnapshot(dependencies.getStudent(leg.studentId), leg.index + 1)),
     splits: plan.legs.map(leg => ({ studentId: leg.studentId, leg: leg.index + 1,
       time: leg.endTime - leg.startTime, startDistance: leg.startDistance, endDistance: leg.endDistance })),
     exchanges: plan.exchanges }))

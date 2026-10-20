@@ -1,4 +1,5 @@
 import { predict100 } from './physics.js'
+import { relayMeetResultSnapshot } from './relay-data.js'
 
 export const RELAY_LEGS = 16
 export const RELAY_DISTANCE = RELAY_LEGS * 100
@@ -153,7 +154,7 @@ export function completeRelayMatch(meet, matchId, results, finishedAt = new Date
       studentIds: entrant.studentIds.slice(), lane: match.classIds.indexOf(result.classId) + 1 }
   }).sort((a, b) => a.time - b.time || a.lane - b.lane)
     .map((result, index) => ({ ...result, place: index + 1, qualified: !next.friendly && index < match.qualifyCount }))
-  Object.assign(match, { status: 'done', results: ordered,
+  Object.assign(match, { status: 'done', results: ordered.map(relayMeetResultSnapshot),
     qualifiedClassIds: ordered.filter(result => result.qualified).map(result => result.classId),
     raceId: next.friendly ? null : match.id, finishedAt })
   next.completedMatches++
