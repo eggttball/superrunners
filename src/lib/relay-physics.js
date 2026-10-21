@@ -260,28 +260,7 @@ export function relayRaceState(plans, elapsed) {
   const ordered = teams.slice().sort((a, b) => Number(b.finished) - Number(a.finished)
     || (a.finished && b.finished ? a.time - b.time : b.distance - a.distance) || a.lane - b.lane)
   ordered.forEach((team, index) => { team.place = index + 1 })
-  separateSharedRunners(runners, plans, t)
+  // Keep each holder at the actual baton distance. Lane changes handle the
+  // shared-track display without moving runners ahead of or behind their pace.
   return { teams, runners, finished: teams.length > 0 && teams.every(team => team.finished) }
-}
-
-/** Display offsets preserve every baton metre and disappear in the transfer/finish zones. */
-function separateSharedRunners(runners, plans) {
-  const shared = runners.filter(runner => runner.role === 'active' && runner.distance > 355 && runner.distance < 1580)
-  for (const current of shared) {
-    const plan = plans.find(plan => plan.classId === current.classId)
-    const leg = plan.legs.find(leg => leg.studentId === current.studentId)
-    const incoming = plan.exchanges[leg.index - 1], outgoing = plan.exchanges[leg.index]
-    // Fixed original-lane offsets are continuous when two teams overtake.
-    // The 40 m ramps bound the extra apparent velocity and leave exact
-    // positions at overlap start/end and at the common finish line.
-    const incomingDistance = incoming ? leg.startDistance + profileState(leg.profile, incoming.overlapEnd - incoming.time).distance : leg.startDistance
-    const outgoingDistance = outgoing?.overlapDistance ?? leg.endDistance
-    const zoneFade = Math.min(smooth((current.distance - incomingDistance) / 40),
-      smooth((outgoingDistance - current.distance) / 40),
-      smooth((current.distance - 355) / 40), smooth((1580 - current.distance) / 40))
-    const nearest = Math.min(80, ...shared.filter(other => other !== current).map(other => Math.abs(other.distance - current.distance)))
-    const crowdFade = smooth((80 - nearest) / 48)
-    current.trackDistance -= (current.lane - 1) * 3.4 * zoneFade * crowdFade
-    current.facing = relayPoint(current.trackDistance, current.lane, current.trackLane).facing
-  }
 }
